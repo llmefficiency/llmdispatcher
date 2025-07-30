@@ -11,37 +11,123 @@ import (
 )
 
 func main() {
-	// Get API key from environment
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" {
-		log.Fatal("OPENAI_API_KEY environment variable is required")
-	}
+	// Get API keys from environment variables
+	openaiAPIKey := os.Getenv("OPENAI_API_KEY")
+	anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	googleAPIKey := os.Getenv("GOOGLE_API_KEY")
+	azureOpenAIAPIKey := os.Getenv("AZURE_OPENAI_API_KEY")
+	cohereAPIKey := os.Getenv("COHERE_API_KEY")
 
 	// Create dispatcher with configuration
 	config := &llmdispatcher.Config{
-		DefaultVendor: "openai",
-		Timeout:       30 * time.Second,
-		EnableLogging: true,
-		EnableMetrics: true,
+		DefaultVendor:  "openai",
+		FallbackVendor: "anthropic", // Will be used when implemented
+		Timeout:        30 * time.Second,
+		EnableLogging:  true,
+		EnableMetrics:  true,
 		RetryPolicy: &llmdispatcher.RetryPolicy{
 			MaxRetries:      3,
 			BackoffStrategy: llmdispatcher.ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
+		RoutingRules: []llmdispatcher.RoutingRule{
+			{
+				Condition: llmdispatcher.RoutingCondition{
+					ModelPattern: "gpt-4",
+				},
+				Vendor:   "openai",
+				Priority: 1,
+				Enabled:  true,
+			},
+			{
+				Condition: llmdispatcher.RoutingCondition{
+					ModelPattern: "claude",
+				},
+				Vendor:   "anthropic",
+				Priority: 1,
+				Enabled:  true,
+			},
+		},
 	}
 
 	dispatcher := llmdispatcher.NewWithConfig(config)
 
-	// Create and register OpenAI vendor
-	openaiConfig := &llmdispatcher.VendorConfig{
-		APIKey:  apiKey,
-		Timeout: 30 * time.Second,
+	// Register OpenAI vendor (if API key is available)
+	if openaiAPIKey != "" {
+		openaiConfig := &llmdispatcher.VendorConfig{
+			APIKey:  openaiAPIKey,
+			Timeout: 30 * time.Second,
+			Headers: map[string]string{
+				"User-Agent": "llmdispatcher/1.0",
+			},
+		}
+
+		openaiVendor := llmdispatcher.NewOpenAIVendor(openaiConfig)
+		if err := dispatcher.RegisterVendor(openaiVendor); err != nil {
+			log.Printf("Failed to register OpenAI vendor: %v", err)
+		} else {
+			log.Println("✅ Registered OpenAI vendor")
+		}
+	} else {
+		log.Println("⚠️  OPENAI_API_KEY not set, skipping OpenAI vendor")
 	}
 
-	openaiVendor := llmdispatcher.NewOpenAIVendor(openaiConfig)
-	if err := dispatcher.RegisterVendor(openaiVendor); err != nil {
-		log.Fatalf("Failed to register OpenAI vendor: %v", err)
+	// Register Anthropic vendor (when implemented)
+	if anthropicAPIKey != "" {
+		log.Println("ℹ️  Anthropic vendor not yet implemented")
+		// anthropicVendor := llmdispatcher.NewAnthropicVendor(&llmdispatcher.VendorConfig{
+		//     APIKey: anthropicAPIKey,
+		//     Timeout: 30 * time.Second,
+		// })
+		// dispatcher.RegisterVendor(anthropicVendor)
+	} else {
+		log.Println("⚠️  ANTHROPIC_API_KEY not set")
 	}
+
+	// Register Google vendor (when implemented)
+	if googleAPIKey != "" {
+		log.Println("ℹ️  Google vendor not yet implemented")
+		// googleVendor := llmdispatcher.NewGoogleVendor(&llmdispatcher.VendorConfig{
+		//     APIKey: googleAPIKey,
+		//     Timeout: 30 * time.Second,
+		// })
+		// dispatcher.RegisterVendor(googleVendor)
+	} else {
+		log.Println("⚠️  GOOGLE_API_KEY not set")
+	}
+
+	// Register Azure OpenAI vendor (when implemented)
+	if azureOpenAIAPIKey != "" {
+		log.Println("ℹ️  Azure OpenAI vendor not yet implemented")
+		// azureVendor := llmdispatcher.NewAzureOpenAIVendor(&llmdispatcher.VendorConfig{
+		//     APIKey: azureOpenAIAPIKey,
+		//     BaseURL: os.Getenv("AZURE_OPENAI_ENDPOINT"),
+		//     Timeout: 30 * time.Second,
+		// })
+		// dispatcher.RegisterVendor(azureVendor)
+	} else {
+		log.Println("⚠️  AZURE_OPENAI_API_KEY not set")
+	}
+
+	// Register Cohere vendor (when implemented)
+	if cohereAPIKey != "" {
+		log.Println("ℹ️  Cohere vendor not yet implemented")
+		// cohereVendor := llmdispatcher.NewCohereVendor(&llmdispatcher.VendorConfig{
+		//     APIKey: cohereAPIKey,
+		//     Timeout: 30 * time.Second,
+		// })
+		// dispatcher.RegisterVendor(cohereVendor)
+	} else {
+		log.Println("⚠️  COHERE_API_KEY not set")
+	}
+
+	// Check if we have any vendors registered
+	vendors := dispatcher.GetVendors()
+	if len(vendors) == 0 {
+		log.Fatal("No vendors registered. Please set at least one API key.")
+	}
+
+	log.Printf("✅ Registered vendors: %v", vendors)
 
 	// Create a request
 	request := &llmdispatcher.Request{
@@ -64,7 +150,7 @@ func main() {
 	}
 
 	// Print the response
-	fmt.Printf("Response from %s:\n", response.Vendor)
+	fmt.Printf("\n📝 Response from %s:\n", response.Vendor)
 	fmt.Printf("Model: %s\n", response.Model)
 	fmt.Printf("Content: %s\n", response.Content)
 	fmt.Printf("Usage: %d prompt tokens, %d completion tokens, %d total tokens\n",
@@ -74,7 +160,7 @@ func main() {
 
 	// Print statistics
 	stats := dispatcher.GetStats()
-	fmt.Printf("\nDispatcher Statistics:\n")
+	fmt.Printf("\n📊 Dispatcher Statistics:\n")
 	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
 	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
 	fmt.Printf("Failed Requests: %d\n", stats.FailedRequests)
@@ -82,7 +168,7 @@ func main() {
 
 	// Print vendor statistics
 	for vendorName, vendorStats := range stats.VendorStats {
-		fmt.Printf("\n%s Vendor Statistics:\n", vendorName)
+		fmt.Printf("\n🔍 %s Vendor Statistics:\n", vendorName)
 		fmt.Printf("  Requests: %d\n", vendorStats.Requests)
 		fmt.Printf("  Successes: %d\n", vendorStats.Successes)
 		fmt.Printf("  Failures: %d\n", vendorStats.Failures)

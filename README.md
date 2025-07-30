@@ -196,15 +196,46 @@ for vendorName, vendorStats := range stats.VendorStats {
 
 ## Running the Example
 
-1. Set your OpenAI API key:
+### Method 1: Environment Variables
+
+1. Set your API keys as environment variables:
 ```bash
-export OPENAI_API_KEY="your-api-key-here"
+export OPENAI_API_KEY="your-openai-api-key"
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
+export GOOGLE_API_KEY="your-google-api-key"
+export AZURE_OPENAI_API_KEY="your-azure-openai-api-key"
+export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com/"
+export COHERE_API_KEY="your-cohere-api-key"
 ```
 
 2. Run the example:
 ```bash
 go run cmd/example/main.go
 ```
+
+### Method 2: .env File
+
+1. Copy the example environment file:
+```bash
+cp cmd/example/env.example .env
+```
+
+2. Edit `.env` and add your API keys:
+```bash
+# OpenAI Configuration
+OPENAI_API_KEY=sk-your-actual-openai-key
+ANTHROPIC_API_KEY=sk-ant-your-actual-anthropic-key
+# ... add other keys as needed
+```
+
+3. Run the example:
+```bash
+go run cmd/example/main.go
+```
+
+### Method 3: Configuration File
+
+You can also load configuration from YAML or JSON files. See `cmd/example/config.go` for examples.
 
 ## Supported Vendors
 
@@ -226,6 +257,44 @@ go run cmd/example/main.go
 3. Implement your changes
 4. Add tests
 5. Submit a pull request
+
+## API Key Security
+
+### Best Practices
+
+1. **Never commit API keys to version control**
+   - Add `.env` to your `.gitignore`
+   - Use environment variables in production
+   - Use secret management services (AWS Secrets Manager, HashiCorp Vault, etc.)
+
+2. **Environment-specific configuration**
+   ```bash
+   # Development
+   export OPENAI_API_KEY="sk-dev-key"
+   
+   # Production
+   export OPENAI_API_KEY="sk-prod-key"
+   ```
+
+3. **Rotate keys regularly**
+   - Set up key rotation schedules
+   - Monitor API usage for unusual activity
+   - Use different keys for different environments
+
+4. **Limit key permissions**
+   - Use API keys with minimal required permissions
+   - Set up rate limits and usage quotas
+   - Monitor API usage and costs
+
+### Supported Environment Variables
+
+| Vendor | API Key Variable | Base URL Variable | Timeout Variable |
+|--------|------------------|-------------------|------------------|
+| OpenAI | `OPENAI_API_KEY` | `OPENAI_BASE_URL` | `OPENAI_TIMEOUT` |
+| Anthropic | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL` | `ANTHROPIC_TIMEOUT` |
+| Google | `GOOGLE_API_KEY` | `GOOGLE_BASE_URL` | `GOOGLE_TIMEOUT` |
+| Azure OpenAI | `AZURE_OPENAI_API_KEY` | `AZURE_OPENAI_ENDPOINT` | `AZURE_OPENAI_TIMEOUT` |
+| Cohere | `COHERE_API_KEY` | `COHERE_BASE_URL` | `COHERE_TIMEOUT` |
 
 ## License
 
