@@ -646,3 +646,340 @@ func TestMatchesCondition(t *testing.T) {
 		})
 	}
 }
+
+func TestDispatcher_Send_Validation(t *testing.T) {
+	dispatcher := New()
+
+	// Register a mock vendor
+	mockVendor := &MockVendor{
+		name:      "test",
+		available: true,
+		response: &models.Response{
+			Content: "test response",
+			Model:   "test-model",
+			Vendor:  "test",
+		},
+	}
+	dispatcher.RegisterVendor(mockVendor)
+
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		req     *models.Request
+		wantErr bool
+	}{
+		{
+			name: "nil context",
+			ctx:  nil,
+			req: &models.Request{
+				Model: "test",
+				Messages: []models.Message{
+					{Role: "user", Content: "test"},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:    "nil request",
+			ctx:     context.Background(),
+			req:     nil,
+			wantErr: true,
+		},
+		{
+			name: "invalid request - empty model",
+			ctx:  context.Background(),
+			req: &models.Request{
+				Model: "",
+				Messages: []models.Message{
+					{Role: "user", Content: "test"},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid request - no messages",
+			ctx:  context.Background(),
+			req: &models.Request{
+				Model:    "test",
+				Messages: []models.Message{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid request",
+			ctx:  context.Background(),
+			req: &models.Request{
+				Model: "test",
+				Messages: []models.Message{
+					{Role: "user", Content: "test"},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := dispatcher.Send(tt.ctx, tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Dispatcher.Send() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDispatcher_RegisterVendor_Validation(t *testing.T) {
+	dispatcher := New()
+
+	tests := []struct {
+		name    string
+		vendor  models.LLMVendor
+		wantErr bool
+	}{
+		{
+			name:    "nil vendor",
+			vendor:  nil,
+			wantErr: true,
+		},
+		{
+			name: "empty vendor name",
+			vendor: &MockVendor{
+				name: "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid vendor",
+			vendor: &MockVendor{
+				name: "test",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := dispatcher.RegisterVendor(tt.vendor)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Dispatcher.RegisterVendor() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDispatcher_SelectVendor_NoVendors(t *testing.T) {
+	dispatcher := New()
+	req := &models.Request{
+		Model: "test",
+		Messages: []models.Message{
+			{Role: "user", Content: "test"},
+		},
+	}
+
+	vendor, err := dispatcher.selectVendor(context.Background(), req)
+	if err != models.ErrNoVendorsRegistered {
+		t.Errorf("Expected ErrNoVendorsRegistered, got %v", err)
+	}
+	if vendor != nil {
+		t.Errorf("Expected nil vendor, got %v", vendor)
+	}
+}
+
+func TestDispatcher_SelectVendor_Unavailable(t *testing.T) {
+	dispatcher := New()
+
+	// Register unavailable vendor
+	mockVendor := &MockVendor{
+		name:      "test",
+		available: false,
+	}
+	dispatcher.RegisterVendor(mockVendor)
+
+	req := &models.Request{
+		Model: "test",
+		Messages: []models.Message{
+			{Role: "user", Content: "test"},
+		},
+	}
+
+	vendor, err := dispatcher.selectVendor(context.Background(), req)
+	if err != models.ErrVendorUnavailable {
+		t.Errorf("Expected ErrVendorUnavailable, got %v", err)
+	}
+	if vendor != nil {
+		t.Errorf("Expected nil vendor, got %v", vendor)
+	}
+}
+
+func TestDispatcher_SelectVendor_DefaultVendor(t *testing.T) {
+	dispatcher := NewWithConfig(&models.Config{
+		DefaultVendor: "test",
+	})
+
+	// Register available vendor
+	mockVendor := &MockVendor{
+		name:      "test",
+		available: true,
+	}
+	dispatcher.RegisterVendor(mockVendor)
+
+	req := &models.Request{
+		Model: "test",
+		Messages: []models.Message{
+			{Role: "user", Content: "test"},
+		},
+	}
+
+	vendor, err := dispatcher.selectVendor(context.Background(), req)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if vendor == nil {
+		t.Errorf("Expected vendor, got nil")
+	}
+	if vendor.Name() != "test" {
+		t.Errorf("Expected vendor name 'test', got %s", vendor.Name())
+	}
+}
+
+func TestDispatcher_SelectVendor_Fallback(t *testing.T) {
+	dispatcher := NewWithConfig(&models.Config{
+		DefaultVendor:  "default",
+		FallbackVendor: "fallback",
+	})
+
+	// Register unavailable default vendor
+	defaultVendor := &MockVendor{
+		name:      "default",
+		available: false,
+	}
+	dispatcher.RegisterVendor(defaultVendor)
+
+	// Register available fallback vendor
+	fallbackVendor := &MockVendor{
+		name:      "fallback",
+		available: true,
+	}
+	dispatcher.RegisterVendor(fallbackVendor)
+
+	req := &models.Request{
+		Model: "test",
+		Messages: []models.Message{
+			{Role: "user", Content: "test"},
+		},
+	}
+
+	vendor, err := dispatcher.selectVendor(context.Background(), req)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if vendor == nil {
+		t.Errorf("Expected vendor, got nil")
+	}
+	if vendor.Name() != "fallback" {
+		t.Errorf("Expected vendor name 'fallback', got %s", vendor.Name())
+	}
+}
+
+func TestDispatcher_MatchesCondition(t *testing.T) {
+	dispatcher := New()
+
+	tests := []struct {
+		name      string
+		req       *models.Request
+		condition models.RoutingCondition
+		want      bool
+	}{
+		{
+			name: "model pattern match",
+			req: &models.Request{
+				Model: "gpt-4",
+				Messages: []models.Message{
+					{Role: "user", Content: "test"},
+				},
+			},
+			condition: models.RoutingCondition{
+				ModelPattern: "gpt-4",
+			},
+			want: true,
+		},
+		{
+			name: "model pattern no match",
+			req: &models.Request{
+				Model: "gpt-3.5-turbo",
+				Messages: []models.Message{
+					{Role: "user", Content: "test"},
+				},
+			},
+			condition: models.RoutingCondition{
+				ModelPattern: "gpt-4",
+			},
+			want: false,
+		},
+		{
+			name: "max tokens within limit",
+			req: &models.Request{
+				Model:     "test",
+				MaxTokens: 100,
+				Messages: []models.Message{
+					{Role: "user", Content: "test"},
+				},
+			},
+			condition: models.RoutingCondition{
+				MaxTokens: 200,
+			},
+			want: true,
+		},
+		{
+			name: "max tokens exceeds limit",
+			req: &models.Request{
+				Model:     "test",
+				MaxTokens: 300,
+				Messages: []models.Message{
+					{Role: "user", Content: "test"},
+				},
+			},
+			condition: models.RoutingCondition{
+				MaxTokens: 200,
+			},
+			want: false,
+		},
+		{
+			name: "temperature within limit",
+			req: &models.Request{
+				Model:       "test",
+				Temperature: 0.5,
+				Messages: []models.Message{
+					{Role: "user", Content: "test"},
+				},
+			},
+			condition: models.RoutingCondition{
+				Temperature: 1.0,
+			},
+			want: true,
+		},
+		{
+			name: "temperature exceeds limit",
+			req: &models.Request{
+				Model:       "test",
+				Temperature: 1.5,
+				Messages: []models.Message{
+					{Role: "user", Content: "test"},
+				},
+			},
+			condition: models.RoutingCondition{
+				Temperature: 1.0,
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dispatcher.matchesCondition(tt.req, tt.condition)
+			if got != tt.want {
+				t.Errorf("matchesCondition() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

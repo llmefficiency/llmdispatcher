@@ -56,6 +56,24 @@ clean:
 	@rm -f coverage.out coverage.html
 	@go clean
 
+# Format code
+fmt:
+	@echo "🔧 Formatting code..."
+	@go fmt ./...
+
+# Lint code
+lint:
+	@echo "🔍 Linting code..."
+	@go vet ./...
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "⚠️  golangci-lint not installed. Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+	fi
+
+# Check code quality
+check: fmt lint test
+
 # Show help
 help:
 	@echo "LLM Dispatcher - Available Commands"
@@ -69,6 +87,9 @@ help:
 	@echo "  make run           - Run the example application"
 	@echo "  make setup         - Setup development environment"
 	@echo "  make clean         - Clean build artifacts"
+	@echo "  make fmt           - Format code with go fmt"
+	@echo "  make lint          - Lint code with go vet and golangci-lint"
+	@echo "  make check         - Run fmt, lint, and test"
 	@echo "  make help          - Show this help message"
 	@echo ""
 	@echo "Environment Setup:"
@@ -77,5 +98,6 @@ help:
 	@echo ""
 	@echo "Example Usage:"
 	@echo "  make setup         # First time setup"
+	@echo "  make check         # Run all quality checks"
 	@echo "  make test          # Run tests"
 	@echo "  make run           # Run example" 

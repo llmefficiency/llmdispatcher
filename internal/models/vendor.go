@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
 
@@ -32,10 +34,69 @@ type Request struct {
 	User        string    `json:"user,omitempty"`
 }
 
+// Validate checks if the request is valid
+func (r *Request) Validate() error {
+	if r.Model == "" {
+		return fmt.Errorf("%w: model cannot be empty", ErrInvalidRequest)
+	}
+
+	if len(r.Messages) == 0 {
+		return fmt.Errorf("%w: at least one message is required", ErrInvalidRequest)
+	}
+
+	// Validate temperature range
+	if r.Temperature < 0 || r.Temperature > 2 {
+		return fmt.Errorf("%w: temperature must be between 0 and 2", ErrInvalidRequest)
+	}
+
+	// Validate top_p range
+	if r.TopP < 0 || r.TopP > 1 {
+		return fmt.Errorf("%w: top_p must be between 0 and 1", ErrInvalidRequest)
+	}
+
+	// Validate max tokens
+	if r.MaxTokens < 0 {
+		return fmt.Errorf("%w: max_tokens cannot be negative", ErrInvalidRequest)
+	}
+
+	// Validate messages
+	for i, msg := range r.Messages {
+		if err := msg.Validate(); err != nil {
+			return fmt.Errorf("%w: message %d: %v", ErrInvalidRequest, i, err)
+		}
+	}
+
+	return nil
+}
+
 // Message represents a single message in a conversation
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+}
+
+// Validate checks if the message is valid
+func (m *Message) Validate() error {
+	if m.Role == "" {
+		return errors.New("role cannot be empty")
+	}
+
+	if m.Content == "" {
+		return errors.New("content cannot be empty")
+	}
+
+	// Validate role values
+	validRoles := map[string]bool{
+		"system":    true,
+		"user":      true,
+		"assistant": true,
+	}
+
+	if !validRoles[m.Role] {
+		return fmt.Errorf("invalid role: %s", m.Role)
+	}
+
+	return nil
 }
 
 // Response represents a standardized LLM response
@@ -70,6 +131,19 @@ type VendorConfig struct {
 	Timeout   time.Duration     `json:"timeout,omitempty"`
 	Headers   map[string]string `json:"headers,omitempty"`
 	RateLimit RateLimit         `json:"rate_limit,omitempty"`
+}
+
+// Validate checks if the vendor config is valid
+func (vc *VendorConfig) Validate() error {
+	if vc.APIKey == "" {
+		return fmt.Errorf("%w: API key cannot be empty", ErrInvalidConfig)
+	}
+
+	if vc.Timeout < 0 {
+		return fmt.Errorf("%w: timeout cannot be negative", ErrInvalidConfig)
+	}
+
+	return nil
 }
 
 // RateLimit represents rate limiting configuration

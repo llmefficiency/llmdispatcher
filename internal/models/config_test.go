@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+// MockError is a mock error type for testing
+type MockError struct {
+	message string
+}
+
+func (e *MockError) Error() string {
+	return e.message
+}
+
 func TestConfig_Validation(t *testing.T) {
 	tests := []struct {
 		name    string

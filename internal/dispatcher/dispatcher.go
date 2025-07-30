@@ -51,12 +51,12 @@ func NewWithConfig(config *models.Config) *Dispatcher {
 // RegisterVendor registers a new vendor with the dispatcher
 func (d *Dispatcher) RegisterVendor(vendor models.LLMVendor) error {
 	if vendor == nil {
-		return fmt.Errorf("vendor cannot be nil")
+		return fmt.Errorf("%w: vendor cannot be nil", models.ErrInvalidConfig)
 	}
 
 	name := vendor.Name()
 	if name == "" {
-		return fmt.Errorf("vendor name cannot be empty")
+		return fmt.Errorf("%w: vendor name cannot be empty", models.ErrInvalidConfig)
 	}
 
 	d.vendors[name] = vendor
@@ -66,6 +66,19 @@ func (d *Dispatcher) RegisterVendor(vendor models.LLMVendor) error {
 
 // Send sends a request to the appropriate vendor based on routing rules
 func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Response, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("%w: context cannot be nil", models.ErrInvalidRequest)
+	}
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", models.ErrInvalidRequest)
+	}
+
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("request validation failed: %w", err)
+	}
+
 	start := time.Now()
 
 	// Update stats
@@ -101,28 +114,51 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 
 // selectVendor determines which vendor should handle the request
 func (d *Dispatcher) selectVendor(ctx context.Context, req *models.Request) (models.LLMVendor, error) {
+	if len(d.vendors) == 0 {
+		return nil, models.ErrNoVendorsRegistered
+	}
+
 	// Check routing rules first
 	if len(d.config.RoutingRules) > 0 {
 		if vendor := d.applyRoutingRules(req); vendor != nil {
-			return vendor, nil
+			if vendor.IsAvailable(ctx) {
+				return vendor, nil
+			}
+			d.logger.Printf("Vendor %s from routing rule is not available", vendor.Name())
 		}
 	}
 
 	// Use default vendor if specified
 	if d.config.DefaultVendor != "" {
 		if vendor, exists := d.vendors[d.config.DefaultVendor]; exists {
-			return vendor, nil
+			if vendor.IsAvailable(ctx) {
+				return vendor, nil
+			}
+			d.logger.Printf("Default vendor %s is not available", d.config.DefaultVendor)
+		} else {
+			d.logger.Printf("Default vendor %s not found", d.config.DefaultVendor)
+		}
+	}
+
+	// Try fallback vendor
+	if d.config.FallbackVendor != "" && d.config.FallbackVendor != d.config.DefaultVendor {
+		if vendor, exists := d.vendors[d.config.FallbackVendor]; exists {
+			if vendor.IsAvailable(ctx) {
+				return vendor, nil
+			}
+			d.logger.Printf("Fallback vendor %s is not available", d.config.FallbackVendor)
 		}
 	}
 
 	// Fallback to first available vendor
-	for _, vendor := range d.vendors {
+	for name, vendor := range d.vendors {
 		if vendor.IsAvailable(ctx) {
+			d.logger.Printf("Using fallback vendor: %s", name)
 			return vendor, nil
 		}
 	}
 
-	return nil, fmt.Errorf("no available vendors")
+	return nil, models.ErrVendorUnavailable
 }
 
 // applyRoutingRules applies routing rules to determine the appropriate vendor
@@ -210,7 +246,11 @@ func (d *Dispatcher) sendWithRetry(ctx context.Context, vendor models.LLMVendor,
 	if d.config.FallbackVendor != "" && vendor.Name() != d.config.FallbackVendor {
 		if fallbackVendor, exists := d.vendors[d.config.FallbackVendor]; exists {
 			d.logger.Printf("Trying fallback vendor: %s", d.config.FallbackVendor)
-			return fallbackVendor.SendRequest(ctx, req)
+			fallbackResponse, fallbackErr := fallbackVendor.SendRequest(ctx, req)
+			if fallbackErr == nil {
+				return fallbackResponse, nil
+			}
+			d.logger.Printf("Fallback vendor also failed: %v", fallbackErr)
 		}
 	}
 
