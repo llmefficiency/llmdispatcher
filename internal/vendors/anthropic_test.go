@@ -189,4 +189,4 @@ func TestAnthropicVendor_ConvertResponse(t *testing.T) {
 	if response.Usage.TotalTokens != 25 {
 		t.Errorf("Expected total tokens 25, got %d", response.Usage.TotalTokens)
 	}
-} 
+}

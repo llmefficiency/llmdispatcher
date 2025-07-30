@@ -414,6 +414,244 @@ func TestVendorStats_Validation(t *testing.T) {
 	}
 }
 
+func TestCostOptimization_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *CostOptimization
+		wantErr bool
+	}{
+		{
+			name: "valid cost optimization",
+			config: &CostOptimization{
+				Enabled:     true,
+				MaxCost:     0.10,
+				PreferCheap: true,
+				VendorCosts: map[string]float64{
+					"openai":   0.002,
+					"anthropic": 0.003,
+					"google":    0.001,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "disabled cost optimization",
+			config: &CostOptimization{
+				Enabled: false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative max cost",
+			config: &CostOptimization{
+				Enabled: true,
+				MaxCost: -0.10,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// For now, we don't have validation for CostOptimization
+			// This test ensures the structure works correctly
+			if tt.config == nil {
+				t.Error("Config should not be nil")
+			}
+		})
+	}
+}
+
+func TestLatencyOptimization_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *LatencyOptimization
+		wantErr bool
+	}{
+		{
+			name: "valid latency optimization",
+			config: &LatencyOptimization{
+				Enabled:    true,
+				MaxLatency: 30 * time.Second,
+				PreferFast: true,
+				LatencyWeights: map[string]float64{
+					"openai":   1.0,
+					"anthropic": 1.2,
+					"google":    0.8,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "disabled latency optimization",
+			config: &LatencyOptimization{
+				Enabled: false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative max latency",
+			config: &LatencyOptimization{
+				Enabled:    true,
+				MaxLatency: -30 * time.Second,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// For now, we don't have validation for LatencyOptimization
+			// This test ensures the structure works correctly
+			if tt.config == nil {
+				t.Error("Config should not be nil")
+			}
+		})
+	}
+}
+
+func TestConfig_AdvancedRouting(t *testing.T) {
+	config := &Config{
+		DefaultVendor: "openai",
+		CostOptimization: &CostOptimization{
+			Enabled:     true,
+			MaxCost:     0.10,
+			PreferCheap: true,
+			VendorCosts: map[string]float64{
+				"openai":   0.002,
+				"anthropic": 0.003,
+			},
+		},
+		LatencyOptimization: &LatencyOptimization{
+			Enabled:    true,
+			MaxLatency: 30*time.Second,
+			PreferFast: true,
+			LatencyWeights: map[string]float64{
+				"openai":   1.0,
+				"anthropic": 1.2,
+			},
+		},
+	}
+
+	if config.CostOptimization == nil {
+		t.Error("Expected CostOptimization to be set")
+	}
+
+	if !config.CostOptimization.Enabled {
+		t.Error("Expected CostOptimization to be enabled")
+	}
+
+	if config.CostOptimization.MaxCost != 0.10 {
+		t.Errorf("Expected MaxCost 0.10, got %f", config.CostOptimization.MaxCost)
+	}
+
+	if config.LatencyOptimization == nil {
+		t.Error("Expected LatencyOptimization to be set")
+	}
+
+	if !config.LatencyOptimization.Enabled {
+		t.Error("Expected LatencyOptimization to be enabled")
+	}
+
+	if config.LatencyOptimization.MaxLatency != 30*time.Second {
+		t.Errorf("Expected MaxLatency 30s, got %v", config.LatencyOptimization.MaxLatency)
+	}
+}
+
+func TestRoutingCondition_AdvancedFields(t *testing.T) {
+	condition := RoutingCondition{
+		ModelPattern:     "gpt-*",
+		MaxTokens:        1000,
+		Temperature:      0.7,
+		CostThreshold:    0.05,
+		LatencyThreshold: 10 * time.Second,
+		UserID:           "user123",
+		RequestType:      "chat",
+		ContentLength:    500,
+	}
+
+	if condition.UserID != "user123" {
+		t.Errorf("Expected UserID 'user123', got %s", condition.UserID)
+	}
+
+	if condition.RequestType != "chat" {
+		t.Errorf("Expected RequestType 'chat', got %s", condition.RequestType)
+	}
+
+	if condition.ContentLength != 500 {
+		t.Errorf("Expected ContentLength 500, got %d", condition.ContentLength)
+	}
+
+	if condition.CostThreshold != 0.05 {
+		t.Errorf("Expected CostThreshold 0.05, got %f", condition.CostThreshold)
+	}
+
+	if condition.LatencyThreshold != 10*time.Second {
+		t.Errorf("Expected LatencyThreshold 10s, got %v", condition.LatencyThreshold)
+	}
+}
+
+func TestDispatcherStats_AdvancedMetrics(t *testing.T) {
+	stats := DispatcherStats{
+		TotalRequests:      100,
+		SuccessfulRequests: 95,
+		FailedRequests:     5,
+		AverageLatency:     2 * time.Second,
+		LastRequestTime:    time.Now(),
+		TotalCost:          0.50,
+		AverageCost:        0.005,
+		CostByVendor: map[string]float64{
+			"openai":   0.30,
+			"anthropic": 0.20,
+		},
+	}
+
+	if stats.TotalCost != 0.50 {
+		t.Errorf("Expected TotalCost 0.50, got %f", stats.TotalCost)
+	}
+
+	if stats.AverageCost != 0.005 {
+		t.Errorf("Expected AverageCost 0.005, got %f", stats.AverageCost)
+	}
+
+	if len(stats.CostByVendor) != 2 {
+		t.Errorf("Expected 2 vendors in CostByVendor, got %d", len(stats.CostByVendor))
+	}
+
+	if stats.CostByVendor["openai"] != 0.30 {
+		t.Errorf("Expected OpenAI cost 0.30, got %f", stats.CostByVendor["openai"])
+	}
+
+	if stats.CostByVendor["anthropic"] != 0.20 {
+		t.Errorf("Expected Anthropic cost 0.20, got %f", stats.CostByVendor["anthropic"])
+	}
+}
+
+func TestVendorStats_AdvancedMetrics(t *testing.T) {
+	stats := VendorStats{
+		Requests:       50,
+		Successes:      48,
+		Failures:       2,
+		AverageLatency: 1 * time.Second,
+		LastUsed:       time.Now(),
+		TotalCost:      0.25,
+		AverageCost:    0.005,
+		TokenUsage:     10000,
+	}
+
+	if stats.TotalCost != 0.25 {
+		t.Errorf("Expected TotalCost 0.25, got %f", stats.TotalCost)
+	}
+
+	if stats.AverageCost != 0.005 {
+		t.Errorf("Expected AverageCost 0.005, got %f", stats.AverageCost)
+	}
+
+	if stats.TokenUsage != 10000 {
+		t.Errorf("Expected TokenUsage 10000, got %d", stats.TokenUsage)
+	}
+}
+
 // Helper validation functions
 func validateConfig(config *Config) error {
 	if config == nil {

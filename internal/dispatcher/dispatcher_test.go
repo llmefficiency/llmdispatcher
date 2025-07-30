@@ -1001,3 +1001,185 @@ func TestDispatcher_MatchesCondition(t *testing.T) {
 		})
 	}
 }
+
+func TestDispatcher_SendStreaming(t *testing.T) {
+	dispatcher := New()
+	
+	// Register a mock vendor that supports streaming
+	mockVendor := &MockVendor{
+		name:       "test-streaming",
+		available:  true,
+		shouldFail: false,
+		capabilities: models.Capabilities{
+			Models:            []string{"test-model"},
+			SupportsStreaming: true,
+			MaxTokens:         1000,
+			MaxInputTokens:    4000,
+		},
+	}
+	
+	if err := dispatcher.RegisterVendor(mockVendor); err != nil {
+		t.Fatalf("Failed to register vendor: %v", err)
+	}
+	
+	req := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+	
+	ctx := context.Background()
+	streamingResp, err := dispatcher.SendStreaming(ctx, req)
+	
+	if err != nil {
+		t.Fatalf("SendStreaming failed: %v", err)
+	}
+	
+	if streamingResp == nil {
+		t.Fatal("Expected streaming response, got nil")
+	}
+	
+	if streamingResp.Model != req.Model {
+		t.Errorf("Expected model %s, got %s", req.Model, streamingResp.Model)
+	}
+	
+	if streamingResp.Vendor != mockVendor.Name() {
+		t.Errorf("Expected vendor %s, got %s", mockVendor.Name(), streamingResp.Vendor)
+	}
+	
+	// Test streaming content
+	select {
+	case content := <-streamingResp.ContentChan:
+		if content != "Mock streaming response" {
+			t.Errorf("Expected content 'Mock streaming response', got %s", content)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("Timeout waiting for streaming content")
+	}
+	
+	// Test completion signal
+	select {
+	case done := <-streamingResp.DoneChan:
+		if !done {
+			t.Error("Expected done signal to be true")
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("Timeout waiting for done signal")
+	}
+	
+	// Don't close here since the goroutine already closes it
+	// streamingResp.Close()
+}
+
+func TestDispatcher_SendStreaming_NoVendors(t *testing.T) {
+	dispatcher := New()
+	
+	req := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+	
+	ctx := context.Background()
+	_, err := dispatcher.SendStreaming(ctx, req)
+	
+	if err == nil {
+		t.Error("Expected error when no vendors are registered")
+	}
+}
+
+func TestDispatcher_SendStreaming_VendorNotAvailable(t *testing.T) {
+	dispatcher := New()
+	
+	// Register an unavailable vendor
+	mockVendor := &MockVendor{
+		name:       "test-unavailable",
+		available:  false,
+		shouldFail: false,
+	}
+	
+	if err := dispatcher.RegisterVendor(mockVendor); err != nil {
+		t.Fatalf("Failed to register vendor: %v", err)
+	}
+	
+	req := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+	
+	ctx := context.Background()
+	_, err := dispatcher.SendStreaming(ctx, req)
+	
+	if err == nil {
+		t.Error("Expected error when vendor is not available")
+	}
+}
+
+func TestDispatcher_SendStreaming_InvalidRequest(t *testing.T) {
+	dispatcher := New()
+	
+	// Register a mock vendor
+	mockVendor := &MockVendor{
+		name:       "test-streaming",
+		available:  true,
+		shouldFail: false,
+	}
+	
+	if err := dispatcher.RegisterVendor(mockVendor); err != nil {
+		t.Fatalf("Failed to register vendor: %v", err)
+	}
+	
+	// Test with nil request
+	ctx := context.Background()
+	_, err := dispatcher.SendStreaming(ctx, nil)
+	
+	if err == nil {
+		t.Error("Expected error for nil request")
+	}
+	
+	// Test with invalid request
+	invalidReq := &models.Request{
+		Model: "", // Empty model
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+	
+	_, err = dispatcher.SendStreaming(ctx, invalidReq)
+	
+	if err == nil {
+		t.Error("Expected error for invalid request")
+	}
+}
+
+func TestDispatcher_SendStreaming_NilContext(t *testing.T) {
+	dispatcher := New()
+	
+	// Register a mock vendor
+	mockVendor := &MockVendor{
+		name:       "test-streaming",
+		available:  true,
+		shouldFail: false,
+	}
+	
+	if err := dispatcher.RegisterVendor(mockVendor); err != nil {
+		t.Fatalf("Failed to register vendor: %v", err)
+	}
+	
+	req := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+	
+	_, err := dispatcher.SendStreaming(nil, req)
+	
+	if err == nil {
+		t.Error("Expected error for nil context")
+	}
+}
