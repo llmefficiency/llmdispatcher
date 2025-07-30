@@ -196,6 +196,20 @@ for vendorName, vendorStats := range stats.VendorStats {
 
 ## Running the Example
 
+### Quick Start with Make
+
+1. Setup the environment:
+```bash
+make setup
+```
+
+2. Edit the `.env` file with your API keys
+
+3. Run the example:
+```bash
+make run
+```
+
 ### Method 1: Environment Variables
 
 1. Set your API keys as environment variables:
@@ -236,6 +250,46 @@ go run cmd/example/main.go
 ### Method 3: Configuration File
 
 You can also load configuration from YAML or JSON files. See `cmd/example/config.go` for examples.
+
+## Running Tests
+
+### Quick Test Commands
+
+```bash
+# Run tests with .env file loading
+make test
+
+# Run tests with HTML coverage report
+make test-html
+
+# Run tests with detailed coverage
+make test-coverage
+
+# Run tests without .env (for CI)
+make test-ci
+```
+
+### Test Scripts
+
+The project includes test scripts that automatically load environment variables from your `.env` file:
+
+```bash
+# Using the Go test runner
+go run scripts/test.go
+
+# Using the bash test runner
+./scripts/test.sh
+
+# With HTML coverage report
+go run scripts/test.go --html
+```
+
+### Test Coverage
+
+The test suite provides excellent coverage:
+- **Internal Dispatcher**: 92.6% coverage
+- **Internal Vendors**: 90.5% coverage  
+- **Public API**: 77.1% coverage
 
 ## Supported Vendors
 
