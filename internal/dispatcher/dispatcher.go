@@ -223,6 +223,11 @@ func (d *Dispatcher) shouldRetry(err error) bool {
 		return false
 	}
 
+	// Handle nil error
+	if err == nil {
+		return false
+	}
+
 	// Check if error is in retryable errors list
 	errStr := err.Error()
 	for _, retryableErr := range d.config.RetryPolicy.RetryableErrors {

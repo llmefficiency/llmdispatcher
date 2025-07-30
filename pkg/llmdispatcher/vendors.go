@@ -9,15 +9,17 @@ import (
 
 // NewOpenAIVendor creates a new OpenAI vendor
 func NewOpenAIVendor(config *VendorConfig) Vendor {
-	internalConfig := &models.VendorConfig{
-		APIKey:  config.APIKey,
-		BaseURL: config.BaseURL,
-		Timeout: config.Timeout,
-		Headers: config.Headers,
-		RateLimit: models.RateLimit{
+	internalConfig := &models.VendorConfig{}
+
+	if config != nil {
+		internalConfig.APIKey = config.APIKey
+		internalConfig.BaseURL = config.BaseURL
+		internalConfig.Timeout = config.Timeout
+		internalConfig.Headers = config.Headers
+		internalConfig.RateLimit = models.RateLimit{
 			RequestsPerMinute: config.RateLimit.RequestsPerMinute,
 			TokensPerMinute:   config.RateLimit.TokensPerMinute,
-		},
+		}
 	}
 
 	return &vendorAdapter{

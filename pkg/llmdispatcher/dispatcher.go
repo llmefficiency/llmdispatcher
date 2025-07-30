@@ -2,6 +2,7 @@ package llmdispatcher
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/llmefficiency/llmdispatcher/internal/dispatcher"
 	"github.com/llmefficiency/llmdispatcher/internal/models"
@@ -21,15 +22,17 @@ func New() *Dispatcher {
 
 // NewWithConfig creates a new dispatcher with custom configuration
 func NewWithConfig(config *Config) *Dispatcher {
-	internalConfig := &models.Config{
-		DefaultVendor:  config.DefaultVendor,
-		FallbackVendor: config.FallbackVendor,
-		Timeout:        config.Timeout,
-		EnableLogging:  config.EnableLogging,
-		EnableMetrics:  config.EnableMetrics,
+	internalConfig := &models.Config{}
+
+	if config != nil {
+		internalConfig.DefaultVendor = config.DefaultVendor
+		internalConfig.FallbackVendor = config.FallbackVendor
+		internalConfig.Timeout = config.Timeout
+		internalConfig.EnableLogging = config.EnableLogging
+		internalConfig.EnableMetrics = config.EnableMetrics
 	}
 
-	if config.RetryPolicy != nil {
+	if config != nil && config.RetryPolicy != nil {
 		internalConfig.RetryPolicy = &models.RetryPolicy{
 			MaxRetries:      config.RetryPolicy.MaxRetries,
 			BackoffStrategy: models.BackoffStrategy(config.RetryPolicy.BackoffStrategy),
@@ -37,7 +40,7 @@ func NewWithConfig(config *Config) *Dispatcher {
 		}
 	}
 
-	if len(config.RoutingRules) > 0 {
+	if config != nil && len(config.RoutingRules) > 0 {
 		internalConfig.RoutingRules = make([]models.RoutingRule, len(config.RoutingRules))
 		for i, rule := range config.RoutingRules {
 			internalConfig.RoutingRules[i] = models.RoutingRule{
@@ -152,10 +155,16 @@ type internalVendorAdapter struct {
 }
 
 func (a *internalVendorAdapter) Name() string {
+	if a.vendor == nil {
+		return ""
+	}
 	return a.vendor.Name()
 }
 
 func (a *internalVendorAdapter) SendRequest(ctx context.Context, req *models.Request) (*models.Response, error) {
+	if a.vendor == nil {
+		return nil, fmt.Errorf("vendor is nil")
+	}
 	// Convert internal request to public request
 	publicReq := &Request{
 		Model:       req.Model,
@@ -197,6 +206,9 @@ func (a *internalVendorAdapter) SendRequest(ctx context.Context, req *models.Req
 }
 
 func (a *internalVendorAdapter) GetCapabilities() models.Capabilities {
+	if a.vendor == nil {
+		return models.Capabilities{}
+	}
 	publicCaps := a.vendor.GetCapabilities()
 	return models.Capabilities{
 		Models:            publicCaps.Models,
@@ -207,6 +219,9 @@ func (a *internalVendorAdapter) GetCapabilities() models.Capabilities {
 }
 
 func (a *internalVendorAdapter) IsAvailable(ctx context.Context) bool {
+	if a.vendor == nil {
+		return false
+	}
 	return a.vendor.IsAvailable(ctx)
 }
 
