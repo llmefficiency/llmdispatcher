@@ -15,6 +15,9 @@ type LLMVendor interface {
 	// SendRequest sends a request to the vendor and returns the response
 	SendRequest(ctx context.Context, req *Request) (*Response, error)
 
+	// SendStreamingRequest sends a streaming request to the vendor
+	SendStreamingRequest(ctx context.Context, req *Request) (*StreamingResponse, error)
+
 	// GetCapabilities returns the vendor's capabilities
 	GetCapabilities() Capabilities
 
@@ -107,6 +110,36 @@ type Response struct {
 	Vendor       string    `json:"vendor"`
 	FinishReason string    `json:"finish_reason,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+// StreamingResponse represents a streaming LLM response
+type StreamingResponse struct {
+	ContentChan chan string `json:"-"`
+	DoneChan    chan bool   `json:"-"`
+	ErrorChan   chan error  `json:"-"`
+	Usage       Usage       `json:"usage"`
+	Model       string      `json:"model"`
+	Vendor      string      `json:"vendor"`
+	CreatedAt   time.Time   `json:"created_at"`
+}
+
+// NewStreamingResponse creates a new streaming response
+func NewStreamingResponse(model, vendor string) *StreamingResponse {
+	return &StreamingResponse{
+		ContentChan: make(chan string, 100),
+		DoneChan:    make(chan bool, 1),
+		ErrorChan:   make(chan error, 1),
+		Model:       model,
+		Vendor:      vendor,
+		CreatedAt:   time.Now(),
+	}
+}
+
+// Close closes all channels in the streaming response
+func (sr *StreamingResponse) Close() {
+	close(sr.ContentChan)
+	close(sr.DoneChan)
+	close(sr.ErrorChan)
 }
 
 // Usage represents token usage information

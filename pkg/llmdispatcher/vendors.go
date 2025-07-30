@@ -27,6 +27,66 @@ func NewOpenAIVendor(config *VendorConfig) Vendor {
 	}
 }
 
+// NewAnthropicVendor creates a new Anthropic vendor
+func NewAnthropicVendor(config *VendorConfig) Vendor {
+	internalConfig := &models.VendorConfig{}
+
+	if config != nil {
+		internalConfig.APIKey = config.APIKey
+		internalConfig.BaseURL = config.BaseURL
+		internalConfig.Timeout = config.Timeout
+		internalConfig.Headers = config.Headers
+		internalConfig.RateLimit = models.RateLimit{
+			RequestsPerMinute: config.RateLimit.RequestsPerMinute,
+			TokensPerMinute:   config.RateLimit.TokensPerMinute,
+		}
+	}
+
+	return &vendorAdapter{
+		vendor: vendors.NewAnthropic(internalConfig),
+	}
+}
+
+// NewGoogleVendor creates a new Google vendor
+func NewGoogleVendor(config *VendorConfig) Vendor {
+	internalConfig := &models.VendorConfig{}
+
+	if config != nil {
+		internalConfig.APIKey = config.APIKey
+		internalConfig.BaseURL = config.BaseURL
+		internalConfig.Timeout = config.Timeout
+		internalConfig.Headers = config.Headers
+		internalConfig.RateLimit = models.RateLimit{
+			RequestsPerMinute: config.RateLimit.RequestsPerMinute,
+			TokensPerMinute:   config.RateLimit.TokensPerMinute,
+		}
+	}
+
+	return &vendorAdapter{
+		vendor: vendors.NewGoogle(internalConfig),
+	}
+}
+
+// NewAzureOpenAIVendor creates a new Azure OpenAI vendor
+func NewAzureOpenAIVendor(config *VendorConfig) Vendor {
+	internalConfig := &models.VendorConfig{}
+
+	if config != nil {
+		internalConfig.APIKey = config.APIKey
+		internalConfig.BaseURL = config.BaseURL
+		internalConfig.Timeout = config.Timeout
+		internalConfig.Headers = config.Headers
+		internalConfig.RateLimit = models.RateLimit{
+			RequestsPerMinute: config.RateLimit.RequestsPerMinute,
+			TokensPerMinute:   config.RateLimit.TokensPerMinute,
+		}
+	}
+
+	return &vendorAdapter{
+		vendor: vendors.NewAzureOpenAI(internalConfig),
+	}
+}
+
 // vendorAdapter adapts the internal vendor interface to the public interface
 type vendorAdapter struct {
 	vendor models.LLMVendor

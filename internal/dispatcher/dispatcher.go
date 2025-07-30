@@ -112,6 +112,62 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 	return response, nil
 }
 
+// SendStreaming sends a streaming request to the appropriate vendor
+func (d *Dispatcher) SendStreaming(ctx context.Context, req *models.Request) (*models.StreamingResponse, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("%w: context cannot be nil", models.ErrInvalidRequest)
+	}
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", models.ErrInvalidRequest)
+	}
+
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("request validation failed: %w", err)
+	}
+
+	// Set streaming flag
+	req.Stream = true
+
+	start := time.Now()
+
+	// Update stats
+	d.statsMutex.Lock()
+	d.stats.TotalRequests++
+	d.stats.LastRequestTime = time.Now()
+	d.statsMutex.Unlock()
+
+	// Apply timeout if configured
+	if d.config.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, d.config.Timeout)
+		defer cancel()
+	}
+
+	// Determine which vendor to use
+	vendor, err := d.selectVendor(ctx, req)
+	if err != nil {
+		d.updateStats(false, "", time.Since(start))
+		return nil, fmt.Errorf("failed to select vendor: %w", err)
+	}
+
+	// Check if vendor supports streaming
+	if !vendor.GetCapabilities().SupportsStreaming {
+		return nil, fmt.Errorf("vendor %s does not support streaming", vendor.Name())
+	}
+
+	// Send streaming request
+	streamingResp, err := vendor.SendStreamingRequest(ctx, req)
+	if err != nil {
+		d.updateStats(false, vendor.Name(), time.Since(start))
+		return nil, err
+	}
+
+	d.updateStats(true, vendor.Name(), time.Since(start))
+	return streamingResp, nil
+}
+
 // selectVendor determines which vendor should handle the request
 func (d *Dispatcher) selectVendor(ctx context.Context, req *models.Request) (models.LLMVendor, error) {
 	if len(d.vendors) == 0 {

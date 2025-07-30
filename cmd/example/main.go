@@ -74,37 +74,61 @@ func main() {
 
 	// Register Anthropic vendor (when implemented)
 	if anthropicAPIKey != "" {
-		log.Println("ℹ️  Anthropic vendor not yet implemented")
-		// anthropicVendor := llmdispatcher.NewAnthropicVendor(&llmdispatcher.VendorConfig{
-		//     APIKey: anthropicAPIKey,
-		//     Timeout: 30 * time.Second,
-		// })
-		// dispatcher.RegisterVendor(anthropicVendor)
+		anthropicConfig := &llmdispatcher.VendorConfig{
+			APIKey:  anthropicAPIKey,
+			Timeout: 30 * time.Second,
+			Headers: map[string]string{
+				"User-Agent": "llmdispatcher/1.0",
+			},
+		}
+
+		anthropicVendor := llmdispatcher.NewAnthropicVendor(anthropicConfig)
+		if err := dispatcher.RegisterVendor(anthropicVendor); err != nil {
+			log.Printf("Failed to register Anthropic vendor: %v", err)
+		} else {
+			log.Println("✅ Registered Anthropic vendor")
+		}
 	} else {
 		log.Println("⚠️  ANTHROPIC_API_KEY not set")
 	}
 
 	// Register Google vendor (when implemented)
 	if googleAPIKey != "" {
-		log.Println("ℹ️  Google vendor not yet implemented")
-		// googleVendor := llmdispatcher.NewGoogleVendor(&llmdispatcher.VendorConfig{
-		//     APIKey: googleAPIKey,
-		//     Timeout: 30 * time.Second,
-		// })
-		// dispatcher.RegisterVendor(googleVendor)
+		googleConfig := &llmdispatcher.VendorConfig{
+			APIKey:  googleAPIKey,
+			Timeout: 30 * time.Second,
+			Headers: map[string]string{
+				"User-Agent": "llmdispatcher/1.0",
+			},
+		}
+
+		googleVendor := llmdispatcher.NewGoogleVendor(googleConfig)
+		if err := dispatcher.RegisterVendor(googleVendor); err != nil {
+			log.Printf("Failed to register Google vendor: %v", err)
+		} else {
+			log.Println("✅ Registered Google vendor")
+		}
 	} else {
 		log.Println("⚠️  GOOGLE_API_KEY not set")
 	}
 
 	// Register Azure OpenAI vendor (when implemented)
 	if azureOpenAIAPIKey != "" {
-		log.Println("ℹ️  Azure OpenAI vendor not yet implemented")
-		// azureVendor := llmdispatcher.NewAzureOpenAIVendor(&llmdispatcher.VendorConfig{
-		//     APIKey: azureOpenAIAPIKey,
-		//     BaseURL: os.Getenv("AZURE_OPENAI_ENDPOINT"),
-		//     Timeout: 30 * time.Second,
-		// })
-		// dispatcher.RegisterVendor(azureVendor)
+		azureConfig := &llmdispatcher.VendorConfig{
+			APIKey:  azureOpenAIAPIKey,
+			BaseURL: os.Getenv("AZURE_OPENAI_ENDPOINT"),
+			Timeout: 30 * time.Second,
+			Headers: map[string]string{
+				"User-Agent": "llmdispatcher/1.0",
+			},
+		}
+
+		azureVendor := llmdispatcher.NewAzureOpenAIVendor(azureConfig)
+		if err := dispatcher.RegisterVendor(azureVendor); err != nil {
+			log.Printf("Failed to register Azure OpenAI vendor: %v", err)
+		} else {
+			log.Println("✅ Registered Azure OpenAI vendor")
+		}
 	} else {
 		log.Println("⚠️  AZURE_OPENAI_API_KEY not set")
 	}
