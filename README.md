@@ -4,11 +4,6 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/llmefficiency/llmdispatcher)](https://goreportcard.com/report/github.com/llmefficiency/llmdispatcher)
-[![Go Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)](https://github.com/llmefficiency/llmdispatcher)
-[![GoDoc](https://godoc.org/github.com/llmefficiency/llmdispatcher?status.svg)](https://godoc.org/github.com/llmefficiency/llmdispatcher)
-[![GitHub stars](https://img.shields.io/github/stars/llmefficiency/llmdispatcher.svg?style=social&label=Star)](https://github.com/llmefficiency/llmdispatcher)
-[![GitHub forks](https://img.shields.io/github/forks/llmefficiency/llmdispatcher.svg?style=social&label=Fork)](https://github.com/llmefficiency/llmdispatcher)
 
 A Go library for dispatching LLM requests to different vendors with intelligent routing, retry logic, fallback capabilities, and streaming support.
 
