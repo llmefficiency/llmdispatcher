@@ -1,5 +1,7 @@
 # LLM Dispatcher
 
+> **🤖 AI-Generated Repository**: This project was created using AI assistance to demonstrate best practices in Go development, API design, and documentation.
+
 A Go library for dispatching LLM requests to different vendors with intelligent routing, retry logic, fallback capabilities, and streaming support.
 
 ## Features
@@ -486,6 +488,23 @@ Sophisticated routing based on multiple criteria:
 | Google | `GOOGLE_API_KEY` | `GOOGLE_BASE_URL` | `GOOGLE_TIMEOUT` |
 | Azure OpenAI | `AZURE_OPENAI_API_KEY` | `AZURE_OPENAI_ENDPOINT` | `AZURE_OPENAI_TIMEOUT` |
 | Cohere | `COHERE_API_KEY` | `COHERE_BASE_URL` | `COHERE_TIMEOUT` |
+
+## Documentation
+
+### 📚 Complete Documentation
+- **[docs/INDEX.md](docs/INDEX.md)** - Documentation index and overview
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture and design principles
+- **[docs/API_REFERENCE.md](docs/API_REFERENCE.md)** - Complete API documentation with examples
+- **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development guide for contributors
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[docs/EXAMPLES.md](docs/EXAMPLES.md)** - Comprehensive usage examples
+
+### 🎯 Quick Navigation
+- **Getting Started**: This README → [API Reference](docs/API_REFERENCE.md) → [Examples](docs/EXAMPLES.md)
+- **Development**: [Development Guide](docs/DEVELOPMENT.md) → [Architecture](docs/ARCHITECTURE.md) → [API Reference](docs/API_REFERENCE.md)
+- **Troubleshooting**: [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+- **Documentation Index**: [docs/INDEX.md](docs/INDEX.md)
+- **Version History**: [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 
