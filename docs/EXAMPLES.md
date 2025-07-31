@@ -4,30 +4,30 @@ This document provides comprehensive examples of how to use the LLM Dispatcher.
 
 ## CLI Usage
 
-The example application (`cmd/example/main.go`) provides a command-line interface for testing different configurations:
+The example application (`cmd/example/cli.go`) provides a command-line interface for testing different configurations:
 
 ### Basic CLI Commands
 
 ```bash
 # Run with all available vendors (default mode)
-go run cmd/example/main.go
+go run cmd/example/cli.go
 
 # Vendor mode with default vendor (openai)
-go run cmd/example/main.go --vendor
+go run cmd/example/cli.go --vendor
 
 # Vendor mode with specific vendor override
-go run cmd/example/main.go --vendor --vendor-override anthropic
-go run cmd/example/main.go --vendor --vendor-override openai
+go run cmd/example/cli.go --vendor --vendor-override anthropic
+go run cmd/example/cli.go --vendor --vendor-override openai
 
 # Local mode with Ollama
-go run cmd/example/main.go --local
+go run cmd/example/cli.go --local
 
 # Local mode with custom model
-go run cmd/example/main.go --local --model llama2:13b
-go run cmd/example/main.go --local --model mistral:7b
+go run cmd/example/cli.go --local --model llama2:13b
+go run cmd/example/cli.go --local --model mistral:7b
 
 # Local mode with custom server
-go run cmd/example/main.go --local --server http://localhost:11434
+go run cmd/example/cli.go --local --server http://localhost:11434
 ```
 
 ### CLI Options

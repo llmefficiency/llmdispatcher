@@ -64,7 +64,7 @@ docker run -e OPENAI_API_KEY=your-key -e ANTHROPIC_API_KEY=your-key llmdispatche
 git clone https://github.com/llmefficiency/llmdispatcher.git
 cd llmdispatcher
 go mod download
-go run cmd/example/main.go
+go run cmd/example/cli.go
 ```
 
 ## 🔹 Usage Example
@@ -185,16 +185,16 @@ cp cmd/example/env.example .env
 
 # Run with different modes:
 # Vendor mode with default vendor (openai)
-go run cmd/example/main.go --vendor
+go run cmd/example/cli.go --vendor
 
 # Vendor mode with specific vendor override
-go run cmd/example/main.go --vendor --vendor-override anthropic
+go run cmd/example/cli.go --vendor --vendor-override anthropic
 
 # Local mode with Ollama
-go run cmd/example/main.go --local
+go run cmd/example/cli.go --local
 
 # Local mode with custom model
-go run cmd/example/main.go --local --model llama2:13b
+go run cmd/example/cli.go --local --model llama2:13b
 ```
 
 **Demo Features:**
@@ -280,11 +280,11 @@ Test with cloud vendors (OpenAI, Anthropic, etc.):
 
 ```bash
 # Use default vendor (openai)
-go run cmd/example/main.go --vendor
+go run cmd/example/cli.go --vendor
 
 # Use specific vendor override
-go run cmd/example/main.go --vendor --vendor-override anthropic
-go run cmd/example/main.go --vendor --vendor-override openai
+go run cmd/example/cli.go --vendor --vendor-override anthropic
+go run cmd/example/cli.go --vendor --vendor-override openai
 ```
 
 ### Local Mode
@@ -292,19 +292,19 @@ Test with local models using Ollama:
 
 ```bash
 # Use default local model (llama2:7b)
-go run cmd/example/main.go --local
+go run cmd/example/cli.go --local
 
 # Use custom model
-go run cmd/example/main.go --local --model llama2:13b
-go run cmd/example/main.go --local --model mistral:7b
+go run cmd/example/cli.go --local --model llama2:13b
+go run cmd/example/cli.go --local --model mistral:7b
 
 # Use custom Ollama server
-go run cmd/example/main.go --local --server http://localhost:11434
+go run cmd/example/cli.go --local --server http://localhost:11434
 ```
 
 ### Available Options
 ```bash
-go run cmd/example/main.go --help
+go run cmd/example/cli.go --help
 ```
 
 **Options:**
@@ -334,7 +334,7 @@ cp cmd/example/env.example .env
 ### 3. Run the example
 ```bash
 # Default mode (all vendors)
-go run cmd/example/main.go
+go run cmd/example/cli.go
 
 # Or use specific modes as shown above
 ```

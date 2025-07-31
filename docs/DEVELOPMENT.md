@@ -44,7 +44,7 @@ Private implementation details:
 
 #### `cmd/example/`
 Example application demonstrating usage:
-- `main.go`: Complete usage example with CLI interface
+- `cli.go`: Complete usage example with CLI interface
 - `config.go`: Configuration loading examples
 - `setup.sh`: Environment setup script
 
@@ -54,16 +54,16 @@ The example application provides a command-line interface for testing:
 
 ```bash
 # Test vendor mode with default vendor
-go run cmd/example/main.go --vendor
+go run cmd/example/cli.go --vendor
 
 # Test vendor mode with specific vendor
-go run cmd/example/main.go --vendor --vendor-override anthropic
+go run cmd/example/cli.go --vendor --vendor-override anthropic
 
 # Test local mode with Ollama
-go run cmd/example/main.go --local
+go run cmd/example/cli.go --local
 
 # Test with custom model
-go run cmd/example/main.go --local --model llama2:13b
+go run cmd/example/cli.go --local --model llama2:13b
 ```
 
 ## Development Workflow

@@ -23,10 +23,10 @@ help:
 	@echo "  help        - Show this help message"
 	@echo ""
 	@echo "CLI Usage Examples:"
-	@echo "  go run cmd/example/main.go --vendor"
-	@echo "  go run cmd/example/main.go --vendor --vendor-override anthropic"
-	@echo "  go run cmd/example/main.go --local"
-	@echo "  go run cmd/example/main.go --local --model llama2:13b"
+	@echo "  go run cmd/example/cli.go --vendor"
+	@echo "  go run cmd/example/cli.go --vendor --vendor-override anthropic"
+	@echo "  go run cmd/example/cli.go --local"
+	@echo "  go run cmd/example/cli.go --local --model llama2:13b"
 
 # Run tests with .env file loading
 test:
@@ -59,7 +59,7 @@ test-ci:
 # Build the application
 build:
 	@echo "🔨 Building application..."
-	@go build -o bin/llmdispatcher cmd/example/main.go
+	@go build -o bin/llmdispatcher cmd/example/cli.go
 
 # Run the example application
 run: build
