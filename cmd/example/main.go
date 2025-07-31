@@ -2,15 +2,38 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
+	"github.com/llmefficiency/llmdispatcher/internal/dispatcher"
+	"github.com/llmefficiency/llmdispatcher/internal/models"
+	"github.com/llmefficiency/llmdispatcher/internal/vendors"
 	"github.com/llmefficiency/llmdispatcher/pkg/llmdispatcher"
 )
 
 func main() {
+	// Parse command line flags
+	var localMode = flag.Bool("local", false, "Run in local mode with Ollama")
+	var demoMode = flag.Bool("demo", false, "Run local vendor demo")
+	var modelPath = flag.String("model", "llama2:7b", "Model to use in local mode")
+	var serverURL = flag.String("server", "http://localhost:11434", "Ollama server URL")
+	flag.Parse()
+
+	// Check if running in demo mode
+	if *demoMode {
+		RunLocalDemo()
+		return
+	}
+
+	// Check if running in local mode
+	if *localMode {
+		runLocalMode(*modelPath, *serverURL)
+		return
+	}
+
 	// Get API keys from environment variables
 	openaiAPIKey := os.Getenv("OPENAI_API_KEY")
 	anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
@@ -199,4 +222,101 @@ func main() {
 		fmt.Printf("  Average Latency: %v\n", vendorStats.AverageLatency)
 		fmt.Printf("  Last Used: %v\n", vendorStats.LastUsed)
 	}
+}
+
+// runLocalMode runs the dispatcher in local mode using Ollama
+func runLocalMode(modelPath, serverURL string) {
+	log.Printf("🚀 Starting local mode with model: %s", modelPath)
+	log.Printf("📡 Connecting to Ollama server: %s", serverURL)
+
+	// Create dispatcher with local configuration
+	config := &models.Config{
+		DefaultVendor: "local",
+		Timeout:       60 * time.Second,
+		EnableLogging: true,
+		EnableMetrics: true,
+		CostOptimization: &models.CostOptimization{
+			Enabled:     true,
+			PreferCheap: true,
+			VendorCosts: map[string]float64{
+				"local": 0.0001, // Cheapest option
+			},
+		},
+	}
+
+	disp := dispatcher.NewWithConfig(config)
+
+	// Create and register local vendor
+	localConfig := &models.VendorConfig{
+		APIKey: "dummy", // Not used for local models
+		Headers: map[string]string{
+			"server_url": serverURL,
+			"model_path": modelPath,
+		},
+		Timeout: 60 * time.Second,
+	}
+
+	localVendor := vendors.NewLocal(localConfig)
+	if err := disp.RegisterVendor(localVendor); err != nil {
+		log.Fatalf("Failed to register local vendor: %v", err)
+	}
+
+	log.Println("✅ Local vendor registered successfully")
+
+	// Test basic functionality
+	ctx := context.Background()
+	req := &models.Request{
+		Model: modelPath,
+		Messages: []models.Message{
+			{Role: "user", Content: "What is the capital of France?"},
+		},
+		Temperature: 0.7,
+		MaxTokens:   100,
+	}
+
+	log.Println("📤 Sending test request...")
+	resp, err := disp.Send(ctx, req)
+	if err != nil {
+		log.Fatalf("Failed to send request: %v", err)
+	}
+
+	log.Println("✅ Request successful!")
+	fmt.Printf("\n📝 Response from %s:\n", resp.Vendor)
+	fmt.Printf("Model: %s\n", resp.Model)
+	fmt.Printf("Content: %s\n", resp.Content)
+	fmt.Printf("Usage: %d prompt tokens, %d completion tokens, %d total tokens\n",
+		resp.Usage.PromptTokens,
+		resp.Usage.CompletionTokens,
+		resp.Usage.TotalTokens)
+
+	// Test streaming
+	log.Println("\n🔄 Testing streaming...")
+	streamReq := &models.Request{
+		Model: modelPath,
+		Messages: []models.Message{
+			{Role: "user", Content: "Write a short poem about AI."},
+		},
+		Temperature: 0.8,
+		MaxTokens:   200,
+	}
+
+	streamResp, err := disp.SendStreaming(ctx, streamReq)
+	if err != nil {
+		log.Printf("⚠️  Streaming failed: %v", err)
+	} else {
+		log.Println("✅ Streaming successful!")
+		fmt.Printf("\n📝 Streaming response from %s:\n", streamResp.Vendor)
+		fmt.Printf("Model: %s\n", streamResp.Model)
+		fmt.Printf("Created at: %s\n", streamResp.CreatedAt.Format(time.RFC3339))
+	}
+
+	// Print statistics
+	stats := disp.GetStats()
+	fmt.Printf("\n📊 Local Mode Statistics:\n")
+	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
+	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
+	fmt.Printf("Failed Requests: %d\n", stats.FailedRequests)
+	fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
+
+	log.Println("🎉 Local mode test completed successfully!")
 }
