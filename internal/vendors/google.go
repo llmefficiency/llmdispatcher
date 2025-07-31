@@ -167,10 +167,18 @@ func (g *GoogleVendor) SendStreamingRequest(ctx context.Context, req *models.Req
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
+	// Check HTTP status code
+	if resp.StatusCode != http.StatusOK {
+		streamingResp.Close()
+		// Read error response body
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("HTTP error %d: %s", resp.StatusCode, string(body))
+	}
+
 	// Handle streaming response in goroutine
 	go func() {
 		defer resp.Body.Close()
-		defer streamingResp.Close()
 
 		reader := bufio.NewReader(resp.Body)
 		for {
@@ -192,6 +200,7 @@ func (g *GoogleVendor) SendStreamingRequest(ctx context.Context, req *models.Req
 			// Remove "data: " prefix
 			if strings.HasPrefix(line, "data: ") {
 				data := strings.TrimPrefix(line, "data: ")
+				data = strings.TrimSpace(data)
 				if data == "[DONE]" {
 					streamingResp.DoneChan <- true
 					return

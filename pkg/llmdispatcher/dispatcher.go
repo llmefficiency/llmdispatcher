@@ -133,17 +133,35 @@ func (d *Dispatcher) SendStreaming(ctx context.Context, req *Request) (*Streamin
 	// Copy the channels and data
 	go func() {
 		defer publicStreamingResp.Close()
-		defer internalStreamingResp.Close()
 
 		for {
 			select {
-			case content := <-internalStreamingResp.ContentChan:
-				publicStreamingResp.ContentChan <- content
-			case done := <-internalStreamingResp.DoneChan:
-				publicStreamingResp.DoneChan <- done
+			case content, ok := <-internalStreamingResp.ContentChan:
+				if !ok {
+					return
+				}
+				select {
+				case publicStreamingResp.ContentChan <- content:
+				case <-publicStreamingResp.DoneChan:
+					return
+				}
+			case done, ok := <-internalStreamingResp.DoneChan:
+				if !ok {
+					return
+				}
+				select {
+				case publicStreamingResp.DoneChan <- done:
+				default:
+				}
 				return
-			case err := <-internalStreamingResp.ErrorChan:
-				publicStreamingResp.ErrorChan <- err
+			case err, ok := <-internalStreamingResp.ErrorChan:
+				if !ok {
+					return
+				}
+				select {
+				case publicStreamingResp.ErrorChan <- err:
+				default:
+				}
 				return
 			}
 		}
@@ -307,26 +325,40 @@ func (a *internalVendorAdapter) SendStreamingRequest(ctx context.Context, req *m
 	// Convert public streaming response to internal streaming response
 	internalStreamingResp := models.NewStreamingResponse(req.Model, a.vendor.Name())
 
-	// Copy the channels and data
-	go func() {
-		defer internalStreamingResp.Close()
-		defer publicStreamingResp.Close()
+	// Copy the channels and data synchronously for immediate responses
+	// This handles the case where the vendor sends data immediately
+	for {
+		select {
+		case content := <-publicStreamingResp.ContentChan:
+			internalStreamingResp.ContentChan <- content
+		case done := <-publicStreamingResp.DoneChan:
+			internalStreamingResp.DoneChan <- done
+			return internalStreamingResp, nil
+		case err := <-publicStreamingResp.ErrorChan:
+			internalStreamingResp.ErrorChan <- err
+			return internalStreamingResp, nil
+		default:
+			// If no immediate data, start the goroutine for async streaming
+			go func() {
+				defer internalStreamingResp.Close()
+				defer publicStreamingResp.Close()
 
-		for {
-			select {
-			case content := <-publicStreamingResp.ContentChan:
-				internalStreamingResp.ContentChan <- content
-			case done := <-publicStreamingResp.DoneChan:
-				internalStreamingResp.DoneChan <- done
-				return
-			case err := <-publicStreamingResp.ErrorChan:
-				internalStreamingResp.ErrorChan <- err
-				return
-			}
+				for {
+					select {
+					case content := <-publicStreamingResp.ContentChan:
+						internalStreamingResp.ContentChan <- content
+					case done := <-publicStreamingResp.DoneChan:
+						internalStreamingResp.DoneChan <- done
+						return
+					case err := <-publicStreamingResp.ErrorChan:
+						internalStreamingResp.ErrorChan <- err
+						return
+					}
+				}
+			}()
+			return internalStreamingResp, nil
 		}
-	}()
-
-	return internalStreamingResp, nil
+	}
 }
 
 // vendorWrapper wraps the internal vendor interface

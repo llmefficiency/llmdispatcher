@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -121,6 +122,8 @@ type StreamingResponse struct {
 	Model       string      `json:"model"`
 	Vendor      string      `json:"vendor"`
 	CreatedAt   time.Time   `json:"created_at"`
+	closed      bool        `json:"-"`
+	mu          sync.Mutex  `json:"-"`
 }
 
 // NewStreamingResponse creates a new streaming response
@@ -137,6 +140,13 @@ func NewStreamingResponse(model, vendor string) *StreamingResponse {
 
 // Close closes all channels in the streaming response
 func (sr *StreamingResponse) Close() {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+
+	if sr.closed {
+		return
+	}
+	sr.closed = true
 	close(sr.ContentChan)
 	close(sr.DoneChan)
 	close(sr.ErrorChan)

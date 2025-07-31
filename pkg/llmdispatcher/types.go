@@ -2,6 +2,7 @@ package llmdispatcher
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -60,6 +61,8 @@ type StreamingResponse struct {
 	Model       string      `json:"model"`
 	Vendor      string      `json:"vendor"`
 	CreatedAt   time.Time   `json:"created_at"`
+	closed      bool        `json:"-"`
+	mu          sync.Mutex  `json:"-"`
 }
 
 // NewStreamingResponse creates a new streaming response
@@ -76,6 +79,13 @@ func NewStreamingResponse(model, vendor string) *StreamingResponse {
 
 // Close closes all channels in the streaming response
 func (s *StreamingResponse) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return
+	}
+	s.closed = true
 	close(s.ContentChan)
 	close(s.DoneChan)
 	close(s.ErrorChan)
