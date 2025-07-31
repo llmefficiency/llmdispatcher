@@ -1177,7 +1177,7 @@ func TestDispatcher_SendStreaming_NilContext(t *testing.T) {
 		},
 	}
 
-	_, err := dispatcher.SendStreaming(nil, req)
+	_, err := dispatcher.SendStreaming(context.TODO(), req)
 
 	if err == nil {
 		t.Error("Expected error for nil context")

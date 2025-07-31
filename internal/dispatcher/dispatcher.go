@@ -358,7 +358,12 @@ func (d *Dispatcher) calculateBackoff(attempt int) time.Duration {
 	baseDelay := time.Second
 	switch d.config.RetryPolicy.BackoffStrategy {
 	case models.ExponentialBackoff:
-		return baseDelay * time.Duration(1<<uint(attempt-1))
+		// Use int64 to avoid integer overflow, cap at reasonable maximum
+		backoff := int64(1 << (attempt - 1))
+		if backoff > 60 { // Cap at 60 seconds
+			backoff = 60
+		}
+		return baseDelay * time.Duration(backoff)
 	case models.LinearBackoff:
 		return baseDelay * time.Duration(attempt)
 	case models.FixedBackoff:
