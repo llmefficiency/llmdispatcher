@@ -10,8 +10,6 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/llmefficiency/llmdispatcher)](https://goreportcard.com/report/github.com/llmefficiency/llmdispatcher)
-[![Go Reference](https://pkg.go.dev/badge/github.com/llmefficiency/llmdispatcher.svg)](https://pkg.go.dev/github.com/llmefficiency/llmdispatcher)
 [![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen)](https://github.com/llmefficiency/llmdispatcher/actions)
 [![Coverage](https://img.shields.io/badge/Coverage-90%25-brightgreen)](https://github.com/llmefficiency/llmdispatcher/actions)
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen)](https://github.com/llmefficiency/llmdispatcher/actions)

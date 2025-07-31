@@ -1,4 +1,4 @@
-name: Generate Badges
+name: Tests and Quality Checks
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-and-badge:
+  test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -22,46 +22,30 @@ jobs:
       run: |
         go test -v -coverprofile=coverage.out ./...
         go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//' > coverage.txt
-    
-    - name: Generate coverage badge
-      uses: schneegans/dynamic-badges@v1.6.0
-      with:
-        auth: ${{ secrets.GIST_SECRET }}
-        namedLogo: go
-        label: coverage
-        namedColor: green
-        value: ${{ steps.coverage.outputs.value }}
-        file: coverage.txt
-        gist: ${{ secrets.GIST_ID }}
-        filename: coverage.json
+        echo "Coverage: $(cat coverage.txt)%"
     
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v4
       with:
         version: latest
     
-    - name: Generate lint badge
-      uses: schneegans/dynamic-badges@v1.6.0
-      with:
-        auth: ${{ secrets.GIST_SECRET }}
-        namedLogo: golangci-lint
-        label: lint
-        namedColor: green
-        value: passing
-        gist: ${{ secrets.GIST_ID }}
-        filename: lint.json
+    - name: Run go vet
+      run: go vet ./...
     
-    - name: Run security scan
+    - name: Run go fmt check
       run: |
-        go list -json -deps ./... | nancy sleuth
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "Code is not formatted. Please run 'go fmt ./...'"
+          exit 1
+        fi
     
-    - name: Generate security badge
-      uses: schneegans/dynamic-badges@v1.6.0
+    - name: Security scan with gosec
+      uses: securecodewarrior/github-action-gosec@master
       with:
-        auth: ${{ secrets.GIST_SECRET }}
-        namedLogo: security
-        label: security
-        namedColor: blue
-        value: scanned
-        gist: ${{ secrets.GIST_ID }}
-        filename: security.json 
+        args: '-fmt sarif -out results.sarif ./...'
+    
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: results.sarif 
