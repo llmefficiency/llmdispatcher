@@ -16,6 +16,33 @@ import (
 	"github.com/llmefficiency/llmdispatcher/pkg/llmdispatcher"
 )
 
+// printResponse prints a formatted response
+func printResponse(vendor, model, content string, usage llmdispatcher.Usage) {
+	fmt.Printf("\n📝 Response from %s:\n", vendor)
+	fmt.Printf("Model: %s\n", model)
+	fmt.Printf("Content: %s\n", content)
+	fmt.Printf("Usage: %d prompt tokens, %d completion tokens, %d total tokens\n",
+		usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
+}
+
+// printStats prints dispatcher statistics
+func printStats(stats *llmdispatcher.Stats) {
+	fmt.Printf("\n📊 Dispatcher Statistics:\n")
+	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
+	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
+	fmt.Printf("Failed Requests: %d\n", stats.FailedRequests)
+	fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
+}
+
+// printInternalStats prints internal dispatcher statistics
+func printInternalStats(stats *models.DispatcherStats) {
+	fmt.Printf("\n📊 Dispatcher Statistics:\n")
+	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
+	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
+	fmt.Printf("Failed Requests: %d\n", stats.FailedRequests)
+	fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
+}
+
 // loadEnv loads environment variables from .env file
 func loadEnv(filename string) error {
 	file, err := os.Open(filename)
@@ -74,12 +101,11 @@ func main() {
 	anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
 	googleAPIKey := os.Getenv("GOOGLE_API_KEY")
 	azureOpenAIAPIKey := os.Getenv("AZURE_OPENAI_API_KEY")
-	cohereAPIKey := os.Getenv("COHERE_API_KEY")
 
 	// Create dispatcher with configuration
 	config := &llmdispatcher.Config{
 		DefaultVendor:  "openai",
-		FallbackVendor: "anthropic", // Will be used when implemented
+		FallbackVendor: "anthropic",
 		Timeout:        30 * time.Second,
 		EnableLogging:  true,
 		EnableMetrics:  true,
@@ -191,18 +217,6 @@ func main() {
 		log.Println("⚠️  AZURE_OPENAI_API_KEY not set")
 	}
 
-	// Register Cohere vendor (when implemented)
-	if cohereAPIKey != "" {
-		log.Println("ℹ️  Cohere vendor not yet implemented")
-		// cohereVendor := llmdispatcher.NewCohereVendor(&llmdispatcher.VendorConfig{
-		//     APIKey: cohereAPIKey,
-		//     Timeout: 30 * time.Second,
-		// })
-		// dispatcher.RegisterVendor(cohereVendor)
-	} else {
-		log.Println("⚠️  COHERE_API_KEY not set")
-	}
-
 	// Check if we have any vendors registered
 	vendors := dispatcher.GetVendors()
 	if len(vendors) == 0 {
@@ -232,21 +246,11 @@ func main() {
 	}
 
 	// Print the response
-	fmt.Printf("\n📝 Response from %s:\n", response.Vendor)
-	fmt.Printf("Model: %s\n", response.Model)
-	fmt.Printf("Content: %s\n", response.Content)
-	fmt.Printf("Usage: %d prompt tokens, %d completion tokens, %d total tokens\n",
-		response.Usage.PromptTokens,
-		response.Usage.CompletionTokens,
-		response.Usage.TotalTokens)
+	printResponse(response.Vendor, response.Model, response.Content, response.Usage)
 
 	// Print statistics
 	stats := dispatcher.GetStats()
-	fmt.Printf("\n📊 Dispatcher Statistics:\n")
-	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
-	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
-	fmt.Printf("Failed Requests: %d\n", stats.FailedRequests)
-	fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
+	printStats(stats)
 
 	// Print vendor statistics
 	for vendorName, vendorStats := range stats.VendorStats {
@@ -408,11 +412,7 @@ func runLocalMode(modelPath, serverURL string) {
 
 	// Print statistics
 	stats := disp.GetStats()
-	fmt.Printf("\n📊 Local Mode Statistics:\n")
-	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
-	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
-	fmt.Printf("Failed Requests: %d\n", stats.FailedRequests)
-	fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
+	printInternalStats(stats)
 
 	log.Println("🎉 Local mode test completed successfully!")
 }
@@ -610,11 +610,7 @@ func runVendorMode(vendorOverride, modelPath, serverURL string) {
 
 	// Print statistics
 	stats := disp.GetStats()
-	fmt.Printf("\n📊 Vendor Mode Statistics:\n")
-	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
-	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
-	fmt.Printf("Failed Requests: %d\n", stats.FailedRequests)
-	fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
+	printInternalStats(stats)
 
 	log.Printf("🎉 Vendor mode test completed successfully for %s!", targetVendor)
 }
