@@ -2,11 +2,9 @@
 
 <div align="center">
 
-<img src="assets/logo.svg" alt="LLM Dispatcher Logo" width="200" height="200">
+# 🤖 LLM Dispatcher
 
 **Intelligent LLM Request Routing & Dispatching**
-
-[![Social Preview](assets/social-preview.svg)](https://github.com/llmefficiency/llmdispatcher)
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
