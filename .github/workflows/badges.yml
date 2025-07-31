@@ -1,0 +1,67 @@
+name: Generate Badges
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-and-badge:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Run tests with coverage
+      run: |
+        go test -v -coverprofile=coverage.out ./...
+        go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//' > coverage.txt
+    
+    - name: Generate coverage badge
+      uses: schneegans/dynamic-badges@v1.6.0
+      with:
+        auth: ${{ secrets.GIST_SECRET }}
+        namedLogo: go
+        label: coverage
+        namedColor: green
+        value: ${{ steps.coverage.outputs.value }}
+        file: coverage.txt
+        gist: ${{ secrets.GIST_ID }}
+        filename: coverage.json
+    
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v4
+      with:
+        version: latest
+    
+    - name: Generate lint badge
+      uses: schneegans/dynamic-badges@v1.6.0
+      with:
+        auth: ${{ secrets.GIST_SECRET }}
+        namedLogo: golangci-lint
+        label: lint
+        namedColor: green
+        value: passing
+        gist: ${{ secrets.GIST_ID }}
+        filename: lint.json
+    
+    - name: Run security scan
+      run: |
+        go list -json -deps ./... | nancy sleuth
+    
+    - name: Generate security badge
+      uses: schneegans/dynamic-badges@v1.6.0
+      with:
+        auth: ${{ secrets.GIST_SECRET }}
+        namedLogo: security
+        label: security
+        namedColor: blue
+        value: scanned
+        gist: ${{ secrets.GIST_ID }}
+        filename: security.json 

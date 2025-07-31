@@ -1,0 +1,62 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="90" fill="#2563eb" opacity="0.1"/>
+  
+  <!-- Central hub -->
+  <circle cx="100" cy="100" r="25" fill="#2563eb" stroke="#1e40af" stroke-width="2"/>
+  
+  <!-- Robot icon in center -->
+  <g transform="translate(100, 100)">
+    <!-- Robot head -->
+    <rect x="-12" y="-15" width="24" height="20" rx="3" fill="#1e40af"/>
+    <!-- Eyes -->
+    <circle cx="-6" cy="-8" r="2" fill="#ffffff"/>
+    <circle cx="6" cy="-8" r="2" fill="#ffffff"/>
+    <!-- Antenna -->
+    <line x1="0" y1="-15" x2="0" y2="-25" stroke="#1e40af" stroke-width="2"/>
+    <circle cx="0" cy="-25" r="3" fill="#ef4444"/>
+  </g>
+  
+  <!-- Connection lines to vendors -->
+  <!-- OpenAI -->
+  <line x1="100" y1="100" x2="50" y2="30" stroke="#10a981" stroke-width="3" opacity="0.7"/>
+  <circle cx="50" cy="30" r="15" fill="#10a981" opacity="0.8"/>
+  <text x="50" y="35" text-anchor="middle" fill="white" font-size="8" font-weight="bold">O</text>
+  
+  <!-- Anthropic -->
+  <line x1="100" y1="100" x2="150" y2="30" stroke="#8b5cf6" stroke-width="3" opacity="0.7"/>
+  <circle cx="150" cy="30" r="15" fill="#8b5cf6" opacity="0.8"/>
+  <text x="150" y="35" text-anchor="middle" fill="white" font-size="8" font-weight="bold">A</text>
+  
+  <!-- Google -->
+  <line x1="100" y1="100" x2="30" y2="150" stroke="#f59e0b" stroke-width="3" opacity="0.7"/>
+  <circle cx="30" cy="150" r="15" fill="#f59e0b" opacity="0.8"/>
+  <text x="30" y="155" text-anchor="middle" fill="white" font-size="8" font-weight="bold">G</text>
+  
+  <!-- Azure -->
+  <line x1="100" y1="100" x2="170" y2="150" stroke="#06b6d4" stroke-width="3" opacity="0.7"/>
+  <circle cx="170" cy="150" r="15" fill="#06b6d4" opacity="0.8"/>
+  <text x="170" y="155" text-anchor="middle" fill="white" font-size="8" font-weight="bold">Z</text>
+  
+  <!-- Data flow arrows -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+            refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/>
+    </marker>
+  </defs>
+  
+  <!-- Animated data flow (simplified) -->
+  <circle cx="75" cy="65" r="3" fill="#6b7280" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="125" cy="65" r="3" fill="#6b7280" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite" begin="0.5s"/>
+  </circle>
+  <circle cx="65" cy="125" r="3" fill="#6b7280" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite" begin="1s"/>
+  </circle>
+  <circle cx="135" cy="125" r="3" fill="#6b7280" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite" begin="1.5s"/>
+  </circle>
+</svg> 

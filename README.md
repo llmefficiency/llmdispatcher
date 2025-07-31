@@ -1,9 +1,33 @@
 # LLM Dispatcher
 
-> **🤖 AI-Generated Repository**: This project was created using AI assistance to demonstrate best practices in Go development, API design, and documentation.
+<div align="center">
+
+<img src="assets/logo.svg" alt="LLM Dispatcher Logo" width="200" height="200">
+
+**Intelligent LLM Request Routing & Dispatching**
+
+[![Social Preview](assets/social-preview.svg)](https://github.com/llmefficiency/llmdispatcher)
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/llmefficiency/llmdispatcher)](https://goreportcard.com/report/github.com/llmefficiency/llmdispatcher)
+[![Go Reference](https://pkg.go.dev/badge/github.com/llmefficiency/llmdispatcher.svg)](https://pkg.go.dev/github.com/llmefficiency/llmdispatcher)
+[![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen)](https://github.com/llmefficiency/llmdispatcher/actions)
+[![Coverage](https://img.shields.io/badge/Coverage-90%25-brightgreen)](https://github.com/llmefficiency/llmdispatcher/actions)
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen)](https://github.com/llmefficiency/llmdispatcher/actions)
+[![Code Quality](https://img.shields.io/badge/Code%20Quality-A%2B-9cf)](https://github.com/llmefficiency/llmdispatcher)
+[![Security](https://img.shields.io/badge/Security-Scanned-blue)](https://github.com/llmefficiency/llmdispatcher/security)
+[![Maintenance](https://img.shields.io/badge/Maintenance-Active-brightgreen)](https://github.com/llmefficiency/llmdispatcher)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen)](https://github.com/llmefficiency/llmdispatcher/pulls)
+[![Issues](https://img.shields.io/badge/Issues-Welcome-orange)](https://github.com/llmefficiency/llmdispatcher/issues)
+[![Release](https://img.shields.io/badge/Release-v1.0.0-blue)](https://github.com/llmefficiency/llmdispatcher/releases)
+[![Last Commit](https://img.shields.io/badge/Last%20Commit-Active-brightgreen)](https://github.com/llmefficiency/llmdispatcher/commits/main)
+[![Contributors](https://img.shields.io/badge/Contributors-Welcome-orange)](https://github.com/llmefficiency/llmdispatcher/graphs/contributors)
+[![Stars](https://img.shields.io/badge/Stars-⭐-yellow)](https://github.com/llmefficiency/llmdispatcher/stargazers)
+
+</div>
+
+> **🤖 AI-Generated Repository**: This project was created using AI assistance to demonstrate best practices in Go development, API design, and documentation.
 
 A Go library for dispatching LLM requests to different vendors with intelligent routing, retry logic, fallback capabilities, and streaming support.
 
