@@ -17,8 +17,9 @@ import (
 
 // AzureOpenAIVendor implements the LLMVendor interface for Azure OpenAI
 type AzureOpenAIVendor struct {
-	config *models.VendorConfig
-	client *http.Client
+	config          *models.VendorConfig
+	client          *http.Client
+	streamingClient *http.Client
 }
 
 // NewAzureOpenAI creates a new Azure OpenAI vendor
@@ -33,9 +34,15 @@ func NewAzureOpenAI(config *models.VendorConfig) *AzureOpenAIVendor {
 		Timeout: config.Timeout,
 	}
 
+	// Create streaming client without timeout
+	streamingClient := &http.Client{
+		// No timeout for streaming requests
+	}
+
 	return &AzureOpenAIVendor{
-		config: config,
-		client: client,
+		config:          config,
+		client:          client,
+		streamingClient: streamingClient,
 	}
 }
 
@@ -145,8 +152,8 @@ func (a *AzureOpenAIVendor) SendStreamingRequest(ctx context.Context, req *model
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", a.config.BaseURL+"/openai/deployments/"+req.Model+"/chat/completions?api-version=2024-02-15-preview", bytes.NewBuffer(reqBody))
+	// Create HTTP request without context for streaming
+	httpReq, err := http.NewRequest("POST", a.config.BaseURL+"/openai/deployments/"+req.Model+"/chat/completions?api-version=2024-02-15-preview", bytes.NewBuffer(reqBody))
 	if err != nil {
 		streamingResp.Close()
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -161,8 +168,8 @@ func (a *AzureOpenAIVendor) SendStreamingRequest(ctx context.Context, req *model
 		httpReq.Header.Set(key, value)
 	}
 
-	// Send request
-	resp, err := a.client.Do(httpReq)
+	// Send request using streaming client (no timeout)
+	resp, err := a.streamingClient.Do(httpReq)
 	if err != nil {
 		streamingResp.Close()
 		return nil, fmt.Errorf("failed to send request: %w", err)

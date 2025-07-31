@@ -16,8 +16,9 @@ import (
 
 // GoogleVendor implements the LLMVendor interface for Google's Gemini models
 type GoogleVendor struct {
-	config *models.VendorConfig
-	client *http.Client
+	config          *models.VendorConfig
+	client          *http.Client
+	streamingClient *http.Client
 }
 
 // NewGoogle creates a new Google vendor
@@ -33,9 +34,15 @@ func NewGoogle(config *models.VendorConfig) *GoogleVendor {
 		Timeout: config.Timeout,
 	}
 
+	// Create streaming client without timeout
+	streamingClient := &http.Client{
+		// No timeout for streaming requests
+	}
+
 	return &GoogleVendor{
-		config: config,
-		client: client,
+		config:          config,
+		client:          client,
+		streamingClient: streamingClient,
 	}
 }
 
@@ -144,8 +151,8 @@ func (g *GoogleVendor) SendStreamingRequest(ctx context.Context, req *models.Req
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", g.config.BaseURL+"/v1beta/models/"+req.Model+":generateContent", bytes.NewBuffer(reqBody))
+	// Create HTTP request without context for streaming
+	httpReq, err := http.NewRequest("POST", g.config.BaseURL+"/v1beta/models/"+req.Model+":generateContent", bytes.NewBuffer(reqBody))
 	if err != nil {
 		streamingResp.Close()
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -160,8 +167,8 @@ func (g *GoogleVendor) SendStreamingRequest(ctx context.Context, req *models.Req
 		httpReq.Header.Set(key, value)
 	}
 
-	// Send request
-	resp, err := g.client.Do(httpReq)
+	// Send request using streaming client (no timeout)
+	resp, err := g.streamingClient.Do(httpReq)
 	if err != nil {
 		streamingResp.Close()
 		return nil, fmt.Errorf("failed to send request: %w", err)
