@@ -2,6 +2,58 @@
 
 This document provides comprehensive examples of how to use the LLM Dispatcher.
 
+## CLI Usage
+
+The example application (`cmd/example/main.go`) provides a command-line interface for testing different configurations:
+
+### Basic CLI Commands
+
+```bash
+# Run with all available vendors (default mode)
+go run cmd/example/main.go
+
+# Vendor mode with default vendor (openai)
+go run cmd/example/main.go --vendor
+
+# Vendor mode with specific vendor override
+go run cmd/example/main.go --vendor --vendor-override anthropic
+go run cmd/example/main.go --vendor --vendor-override openai
+
+# Local mode with Ollama
+go run cmd/example/main.go --local
+
+# Local mode with custom model
+go run cmd/example/main.go --local --model llama2:13b
+go run cmd/example/main.go --local --model mistral:7b
+
+# Local mode with custom server
+go run cmd/example/main.go --local --server http://localhost:11434
+```
+
+### CLI Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--local` | Run in local mode with Ollama | false |
+| `--vendor` | Run in vendor mode with cloud providers | false |
+| `--vendor-override` | Specify vendor (anthropic, openai) | "" |
+| `--model` | Model to use in local mode | "llama2:7b" |
+| `--server` | Ollama server URL | "http://localhost:11434" |
+
+### Environment Setup for CLI
+
+```bash
+# Copy environment template
+cp cmd/example/env.example .env
+
+# Edit .env with your API keys
+export OPENAI_API_KEY="sk-your-openai-key"
+export ANTHROPIC_API_KEY="sk-ant-your-anthropic-key"
+export GOOGLE_API_KEY="your-google-api-key"
+export AZURE_OPENAI_API_KEY="your-azure-key"
+export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com/"
+```
+
 ## Basic Usage
 
 ### Simple Configuration

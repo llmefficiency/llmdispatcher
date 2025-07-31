@@ -36,7 +36,23 @@ ollama serve
 ollama pull llama2:7b
 ```
 
-### 2. Configure Local Vendor
+### 2. Test with CLI
+
+The example application provides easy testing of local models:
+
+```bash
+# Test with default local model (llama2:7b)
+go run cmd/example/main.go --local
+
+# Test with custom model
+go run cmd/example/main.go --local --model llama2:13b
+go run cmd/example/main.go --local --model mistral:7b
+
+# Test with custom server
+go run cmd/example/main.go --local --server http://localhost:11434
+```
+
+### 3. Configure Local Vendor
 
 ```go
 package main

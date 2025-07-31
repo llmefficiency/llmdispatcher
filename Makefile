@@ -10,7 +10,10 @@ help:
 	@echo "  test-coverage - Run tests with detailed coverage"
 	@echo "  test-ci     - Run tests without .env (for CI)"
 	@echo "  build       - Build the application"
-	@echo "  run         - Run the example application"
+	@echo "  run         - Run the example application (default mode)"
+	@echo "  run-vendor  - Run in vendor mode with default vendor"
+	@echo "  run-local   - Run in local mode with Ollama"
+	@echo "  run-anthropic - Run with Anthropic vendor"
 	@echo "  setup       - Setup environment and dependencies"
 	@echo "  clean       - Clean build artifacts"
 	@echo "  fmt         - Format code"
@@ -18,6 +21,12 @@ help:
 	@echo "  check       - Run fmt, lint, and test"
 	@echo "  pre-commit  - Run pre-commit checks (lint + test)"
 	@echo "  help        - Show this help message"
+	@echo ""
+	@echo "CLI Usage Examples:"
+	@echo "  go run cmd/example/main.go --vendor"
+	@echo "  go run cmd/example/main.go --vendor --vendor-override anthropic"
+	@echo "  go run cmd/example/main.go --local"
+	@echo "  go run cmd/example/main.go --local --model llama2:13b"
 
 # Run tests with .env file loading
 test:
@@ -60,6 +69,29 @@ run: build
 	else \
 		echo "⚠️  No .env file found. Please create one or set environment variables."; \
 		echo "💡 Run 'make setup' to create a template .env file."; \
+	fi
+
+# Run with vendor mode
+run-vendor: build
+	@echo "🚀 Running in vendor mode..."
+	@if [ -f .env ]; then \
+		export $$(cat .env | xargs) && ./bin/llmdispatcher --vendor; \
+	else \
+		echo "⚠️  No .env file found. Please create one or set environment variables."; \
+	fi
+
+# Run with local mode
+run-local: build
+	@echo "🚀 Running in local mode..."
+	@./bin/llmdispatcher --local
+
+# Run with specific vendor
+run-anthropic: build
+	@echo "🚀 Running with Anthropic vendor..."
+	@if [ -f .env ]; then \
+		export $$(cat .env | xargs) && ./bin/llmdispatcher --vendor --vendor-override anthropic; \
+	else \
+		echo "⚠️  No .env file found. Please create one or set environment variables."; \
 	fi
 
 # Setup environment and dependencies

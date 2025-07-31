@@ -182,7 +182,19 @@ git clone https://github.com/llmefficiency/llmdispatcher.git
 cd llmdispatcher
 cp cmd/example/env.example .env
 # Edit .env with your API keys
-go run cmd/example/main.go
+
+# Run with different modes:
+# Vendor mode with default vendor (openai)
+go run cmd/example/main.go --vendor
+
+# Vendor mode with specific vendor override
+go run cmd/example/main.go --vendor --vendor-override anthropic
+
+# Local mode with Ollama
+go run cmd/example/main.go --local
+
+# Local mode with custom model
+go run cmd/example/main.go --local --model llama2:13b
 ```
 
 **Demo Features:**
@@ -191,6 +203,7 @@ go run cmd/example/main.go
 - ✅ Streaming response demo
 - ✅ Fallback scenarios
 - ✅ Statistics and metrics
+- ✅ Local model integration with Ollama
 
 ## Features
 
@@ -258,6 +271,49 @@ fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
 fmt.Printf("Total Cost: $%.4f\n", stats.TotalCost)
 ```
 
+## CLI Usage
+
+The example application supports multiple modes for testing different configurations:
+
+### Vendor Mode
+Test with cloud vendors (OpenAI, Anthropic, etc.):
+
+```bash
+# Use default vendor (openai)
+go run cmd/example/main.go --vendor
+
+# Use specific vendor override
+go run cmd/example/main.go --vendor --vendor-override anthropic
+go run cmd/example/main.go --vendor --vendor-override openai
+```
+
+### Local Mode
+Test with local models using Ollama:
+
+```bash
+# Use default local model (llama2:7b)
+go run cmd/example/main.go --local
+
+# Use custom model
+go run cmd/example/main.go --local --model llama2:13b
+go run cmd/example/main.go --local --model mistral:7b
+
+# Use custom Ollama server
+go run cmd/example/main.go --local --server http://localhost:11434
+```
+
+### Available Options
+```bash
+go run cmd/example/main.go --help
+```
+
+**Options:**
+- `--local` - Run in local mode with Ollama
+- `--vendor` - Run in vendor mode with cloud providers
+- `--vendor-override` - Specify vendor (anthropic, openai)
+- `--model` - Model to use in local mode (default: llama2:7b)
+- `--server` - Ollama server URL (default: http://localhost:11434)
+
 ## Environment Setup
 
 ### 1. Set API Keys
@@ -277,7 +333,10 @@ cp cmd/example/env.example .env
 
 ### 3. Run the example
 ```bash
+# Default mode (all vendors)
 go run cmd/example/main.go
+
+# Or use specific modes as shown above
 ```
 
 ## Testing

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/llmefficiency/llmdispatcher/internal/dispatcher"
@@ -14,23 +16,56 @@ import (
 	"github.com/llmefficiency/llmdispatcher/pkg/llmdispatcher"
 )
 
+// loadEnv loads environment variables from .env file
+func loadEnv(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			if key != "" && value != "" {
+				os.Setenv(key, value)
+			}
+		}
+	}
+	return scanner.Err()
+}
+
 func main() {
+	// Load environment variables from .env file
+	if err := loadEnv(".env"); err != nil {
+		log.Printf("⚠️  Could not load .env file: %v", err)
+	}
+
 	// Parse command line flags
 	var localMode = flag.Bool("local", false, "Run in local mode with Ollama")
-	var demoMode = flag.Bool("demo", false, "Run local vendor demo")
+	var vendorMode = flag.Bool("vendor", false, "Run in vendor mode")
+	var vendorOverride = flag.String("vendor-override", "", "Override vendor to use (anthropic, openai). If not specified, uses default vendor")
 	var modelPath = flag.String("model", "llama2:7b", "Model to use in local mode")
 	var serverURL = flag.String("server", "http://localhost:11434", "Ollama server URL")
 	flag.Parse()
 
-	// Check if running in demo mode
-	if *demoMode {
-		RunLocalDemo()
-		return
-	}
-
 	// Check if running in local mode
 	if *localMode {
 		runLocalMode(*modelPath, *serverURL)
+		return
+	}
+
+	// Check if running in vendor mode
+	if *vendorMode {
+		runVendorMode(*vendorOverride, *modelPath, *serverURL)
 		return
 	}
 
@@ -300,15 +335,76 @@ func runLocalMode(modelPath, serverURL string) {
 		MaxTokens:   200,
 	}
 
-	streamResp, err := disp.SendStreaming(ctx, streamReq)
-	if err != nil {
-		log.Printf("⚠️  Streaming failed: %v", err)
-	} else {
+	// Create a background context for streaming (no timeout)
+	streamCtx := context.Background()
+
+	// Run streaming in a separate goroutine to avoid context cancellation
+	streamDone := make(chan bool)
+	go func() {
+		defer close(streamDone)
+
+		streamResp, err := disp.SendStreaming(streamCtx, streamReq)
+		if err != nil {
+			log.Printf("⚠️  Streaming failed: %v", err)
+			return
+		}
+
 		log.Println("✅ Streaming successful!")
 		fmt.Printf("\n📝 Streaming response from %s:\n", streamResp.Vendor)
 		fmt.Printf("Model: %s\n", streamResp.Model)
 		fmt.Printf("Created at: %s\n", streamResp.CreatedAt.Format(time.RFC3339))
-	}
+
+		// Print streaming content
+		fmt.Printf("\n📄 Streaming content:\n")
+		fmt.Printf("Content: ")
+
+		// Read from the streaming response channel with proper error handling
+		done := false
+		contentReceived := false
+
+		for !done {
+			select {
+			case chunk, ok := <-streamResp.ContentChan:
+				if !ok {
+					// Channel closed
+					done = true
+					if contentReceived {
+						fmt.Println() // New line after content
+					}
+				} else {
+					// Print chunk immediately
+					fmt.Print(chunk)
+					contentReceived = true
+				}
+			case err := <-streamResp.ErrorChan:
+				if err != nil {
+					// Check if it's a context cancellation after receiving content
+					if strings.Contains(err.Error(), "context canceled") && contentReceived {
+						// This is expected when we receive content and then context is canceled
+						fmt.Println() // New line after content
+					} else {
+						fmt.Printf("\n❌ Streaming error: %v\n", err)
+					}
+				}
+				done = true
+			case <-streamResp.DoneChan:
+				// Streaming completed successfully
+				done = true
+				if contentReceived {
+					fmt.Println() // New line after content
+				}
+			case <-time.After(30 * time.Second): // Simple timeout
+				fmt.Printf("\n⏰ Streaming timeout after 30 seconds\n")
+				done = true
+			}
+		}
+
+		// Close the streaming response
+		streamResp.Close()
+	}()
+
+	// Wait for streaming to complete
+	<-streamDone
 
 	// Print statistics
 	stats := disp.GetStats()
@@ -319,4 +415,206 @@ func runLocalMode(modelPath, serverURL string) {
 	fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
 
 	log.Println("🎉 Local mode test completed successfully!")
+}
+
+// runVendorMode runs the dispatcher in vendor mode to test specific vendors
+func runVendorMode(vendorOverride, modelPath, serverURL string) {
+	log.Printf("🚀 Starting vendor mode")
+
+	// Determine which vendor to use
+	var targetVendor string
+	if vendorOverride == "" {
+		// Use default vendor (openai)
+		targetVendor = "openai"
+		log.Printf("Using default vendor: %s", targetVendor)
+	} else {
+		// Use specified vendor
+		targetVendor = vendorOverride
+		log.Printf("Using specified vendor: %s", targetVendor)
+	}
+
+	// Create dispatcher with vendor configuration
+	config := &models.Config{
+		DefaultVendor: targetVendor,
+		Timeout:       60 * time.Second,
+		EnableLogging: true,
+		EnableMetrics: true,
+	}
+
+	disp := dispatcher.NewWithConfig(config)
+
+	// Register vendor based on target
+	switch targetVendor {
+	case "anthropic":
+		// Register Anthropic vendor
+		anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+		if anthropicAPIKey == "" {
+			log.Fatal("ANTHROPIC_API_KEY environment variable is required for Anthropic vendor")
+		}
+
+		anthropicConfig := &models.VendorConfig{
+			APIKey:  anthropicAPIKey,
+			BaseURL: "https://api.anthropic.com",
+			Timeout: 120 * time.Second, // Longer timeout for streaming
+			Headers: map[string]string{
+				"User-Agent": "llmdispatcher/1.0",
+			},
+		}
+
+		anthropicVendor := vendors.NewAnthropic(anthropicConfig)
+		if err := disp.RegisterVendor(anthropicVendor); err != nil {
+			log.Fatalf("Failed to register Anthropic vendor: %v", err)
+		}
+		log.Println("✅ Anthropic vendor registered successfully")
+
+	case "openai":
+		// Register OpenAI vendor
+		openaiAPIKey := os.Getenv("OPENAI_API_KEY")
+		if openaiAPIKey == "" {
+			log.Fatal("OPENAI_API_KEY environment variable is required for OpenAI vendor")
+		}
+
+		openaiConfig := &models.VendorConfig{
+			APIKey:  openaiAPIKey,
+			BaseURL: "https://api.openai.com/v1",
+			Timeout: 120 * time.Second, // Longer timeout for streaming
+			Headers: map[string]string{
+				"User-Agent": "llmdispatcher/1.0",
+			},
+		}
+
+		openaiVendor := vendors.NewOpenAI(openaiConfig)
+		if err := disp.RegisterVendor(openaiVendor); err != nil {
+			log.Fatalf("Failed to register OpenAI vendor: %v", err)
+		}
+		log.Println("✅ OpenAI vendor registered successfully")
+
+	default:
+		log.Fatalf("Unsupported vendor: %s. Supported vendors: anthropic, openai", targetVendor)
+	}
+
+	// Test basic functionality
+	ctx := context.Background()
+
+	// Set model based on vendor
+	var requestModel string
+	switch targetVendor {
+	case "anthropic":
+		requestModel = "claude-3-haiku-20240307"
+	case "openai":
+		requestModel = "gpt-3.5-turbo"
+	default:
+		requestModel = "gpt-3.5-turbo" // Default to OpenAI model
+	}
+
+	req := &models.Request{
+		Model: requestModel,
+		Messages: []models.Message{
+			{Role: "user", Content: "What is the capital of France?"},
+		},
+		Temperature: 0.7,
+		MaxTokens:   100,
+	}
+
+	log.Println("📤 Sending test request...")
+	resp, err := disp.Send(ctx, req)
+	if err != nil {
+		log.Fatalf("Failed to send request: %v", err)
+	}
+
+	log.Println("✅ Request successful!")
+	fmt.Printf("\n📝 Response from %s:\n", resp.Vendor)
+	fmt.Printf("Model: %s\n", resp.Model)
+	fmt.Printf("Content: %s\n", resp.Content)
+	fmt.Printf("Usage: %d prompt tokens, %d completion tokens, %d total tokens\n",
+		resp.Usage.PromptTokens,
+		resp.Usage.CompletionTokens,
+		resp.Usage.TotalTokens)
+
+	// Test streaming
+	log.Println("\n🔄 Testing streaming...")
+	streamReq := &models.Request{
+		Model: requestModel,
+		Messages: []models.Message{
+			{Role: "user", Content: "Tell me a short story about a robot."},
+		},
+		Temperature: 0.8,
+		MaxTokens:   150,
+	}
+
+	// Create a background context for streaming (no timeout)
+	streamCtx := context.Background()
+
+	streamResp, err := disp.SendStreaming(streamCtx, streamReq)
+	if err != nil {
+		log.Printf("⚠️  Streaming failed: %v", err)
+	} else {
+		log.Println("✅ Streaming successful!")
+		fmt.Printf("\n📝 Streaming response from %s:\n", streamResp.Vendor)
+		fmt.Printf("Model: %s\n", streamResp.Model)
+		fmt.Printf("Created at: %s\n", streamResp.CreatedAt.Format(time.RFC3339))
+
+		// Print streaming content
+		fmt.Printf("\n📄 Streaming content:\n")
+		fmt.Printf("Content: ")
+
+		// Read from the streaming response channel with proper error handling
+		done := false
+		contentReceived := false
+
+		for !done {
+			select {
+			case chunk, ok := <-streamResp.ContentChan:
+				if !ok {
+					// Channel closed
+					done = true
+					if contentReceived {
+						fmt.Println() // New line after content
+					}
+				} else {
+					// Print chunk immediately
+					fmt.Print(chunk)
+					contentReceived = true
+				}
+			case err := <-streamResp.ErrorChan:
+				if err != nil {
+					// Check if it's a context cancellation after receiving content
+					if strings.Contains(err.Error(), "context canceled") && contentReceived {
+						// This is expected when we receive content and then context is canceled
+						fmt.Println() // New line after content
+					} else {
+						fmt.Printf("\n❌ Streaming error: %v\n", err)
+					}
+				}
+				done = true
+			case <-streamResp.DoneChan:
+				// Streaming completed successfully
+				done = true
+				if contentReceived {
+					fmt.Println() // New line after content
+				}
+			case <-streamCtx.Done():
+				// Context timeout or cancellation
+				if streamCtx.Err() == context.DeadlineExceeded {
+					fmt.Printf("\n⏰ Streaming timeout after 60 seconds\n")
+				} else {
+					fmt.Printf("\n⏰ Streaming canceled\n")
+				}
+				done = true
+			}
+		}
+
+		// Close the streaming response
+		streamResp.Close()
+	}
+
+	// Print statistics
+	stats := disp.GetStats()
+	fmt.Printf("\n📊 Vendor Mode Statistics:\n")
+	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
+	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
+	fmt.Printf("Failed Requests: %d\n", stats.FailedRequests)
+	fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
+
+	log.Printf("🎉 Vendor mode test completed successfully for %s!", targetVendor)
 }

@@ -16,8 +16,9 @@ import (
 
 // OpenAI vendor implementation
 type OpenAI struct {
-	config *models.VendorConfig
-	client *http.Client
+	config          *models.VendorConfig
+	client          *http.Client
+	streamingClient *http.Client
 }
 
 // OpenAIRequest represents the OpenAI API request format
@@ -78,13 +79,20 @@ func NewOpenAI(config *models.VendorConfig) *OpenAI {
 		config.BaseURL = "https://api.openai.com/v1"
 	}
 
+	// Create client with timeout for regular requests
 	client := &http.Client{
 		Timeout: config.Timeout,
 	}
 
+	// Create client without timeout for streaming requests
+	streamingClient := &http.Client{
+		// No timeout for streaming
+	}
+
 	return &OpenAI{
-		config: config,
-		client: client,
+		config:          config,
+		client:          client,
+		streamingClient: streamingClient,
 	}
 }
 
@@ -224,8 +232,8 @@ func (o *OpenAI) SendStreamingRequest(ctx context.Context, req *models.Request) 
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", o.config.BaseURL+"/chat/completions", bytes.NewBuffer(reqBody))
+	// Create HTTP request without context for streaming
+	httpReq, err := http.NewRequest("POST", o.config.BaseURL+"/chat/completions", bytes.NewBuffer(reqBody))
 	if err != nil {
 		streamingResp.Close()
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -240,8 +248,8 @@ func (o *OpenAI) SendStreamingRequest(ctx context.Context, req *models.Request) 
 		httpReq.Header.Set(key, value)
 	}
 
-	// Send request
-	resp, err := o.client.Do(httpReq)
+	// Send request using streaming client (no timeout)
+	resp, err := o.streamingClient.Do(httpReq)
 	if err != nil {
 		streamingResp.Close()
 		return nil, fmt.Errorf("failed to send request: %w", err)
