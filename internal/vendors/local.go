@@ -198,6 +198,7 @@ func (l *Local) sendProcessRequest(ctx context.Context, req *models.Request) (*m
 	}
 
 	// Create command
+	// nolint:gosec // executable path is controlled by configuration, not user input
 	cmd := exec.CommandContext(ctx, l.executable, args...)
 	cmd.Stdin = strings.NewReader(input)
 
@@ -366,6 +367,7 @@ func (l *Local) sendProcessStreamingRequest(ctx context.Context, req *models.Req
 		args = append(args, "-t", fmt.Sprintf("%d", l.resourceLimits.MaxThreads))
 	}
 
+	// nolint:gosec // executable path is controlled by configuration, not user input
 	cmd := exec.CommandContext(ctx, l.executable, args...)
 	cmd.Stdin = strings.NewReader(input)
 
@@ -444,6 +446,7 @@ func (l *Local) checkExecutable() bool {
 		return false
 	}
 
+	// nolint:gosec // executable path is controlled by configuration, not user input
 	cmd := exec.Command(l.executable, "--help")
 	return cmd.Run() == nil
 }

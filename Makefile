@@ -123,10 +123,12 @@ fmt:
 lint:
 	@echo "🔍 Linting code..."
 	@go vet ./...
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
+	@GOLANGCI_LINT="$(HOME)/go/bin/golangci-lint" && \
+	if [ -f "$$GOLANGCI_LINT" ]; then \
+		"$$GOLANGCI_LINT" run; \
 	else \
-		echo "⚠️  golangci-lint not installed. Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+		echo "⚠️  golangci-lint not found at $$GOLANGCI_LINT"; \
+		echo "Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
 	fi
 
 # Check code quality

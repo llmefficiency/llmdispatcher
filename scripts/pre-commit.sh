@@ -50,18 +50,20 @@ else
     exit 1
 fi
 
-# Step 3: Run golangci-lint if available
+# Step 3: Run golangci-lint
 echo "🔍 Running golangci-lint..."
-if command -v golangci-lint >/dev/null 2>&1; then
-    if golangci-lint run ./...; then
+GOLANGCI_LINT="${HOME}/go/bin/golangci-lint"
+if [ -f "$GOLANGCI_LINT" ]; then
+    if "$GOLANGCI_LINT" run; then
         print_status "Golangci-lint passed"
     else
         print_error "Golangci-lint failed"
         exit 1
     fi
 else
-    print_warning "golangci-lint not installed. Skipping linting."
+    print_warning "golangci-lint not found at $GOLANGCI_LINT"
     print_warning "Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
+    print_warning "Skipping linting..."
 fi
 
 # Step 4: Run tests
