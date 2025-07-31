@@ -5,6 +5,13 @@
 *.so
 *.dylib
 
+# Root directory binaries (common Go binary names)
+main
+config
+server
+client
+app
+
 # Test binary, built with `go test -c`
 *.test
 
