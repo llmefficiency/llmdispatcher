@@ -1,12 +1,14 @@
 package vendors
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/llmefficiency/llmdispatcher/internal/models"
@@ -59,7 +61,7 @@ func (g *GoogleVendor) SendRequest(ctx context.Context, req *models.Request) (*m
 	}
 
 	// Build URL with API key
-	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s", 
+	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s",
 		g.config.BaseURL, req.Model, g.config.APIKey)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
@@ -121,9 +123,104 @@ func (g *GoogleVendor) GetCapabilities() models.Capabilities {
 	}
 }
 
-// IsAvailable checks if the vendor is currently available
+// IsAvailable checks if Google is available
 func (g *GoogleVendor) IsAvailable(ctx context.Context) bool {
 	return g.config.APIKey != ""
+}
+
+// SendStreamingRequest sends a streaming request to Google
+func (g *GoogleVendor) SendStreamingRequest(ctx context.Context, req *models.Request) (*models.StreamingResponse, error) {
+	// Create streaming response
+	streamingResp := models.NewStreamingResponse(req.Model, g.Name())
+
+	// Convert to Google format
+	googleReq := g.convertRequest(req)
+	googleReq.Stream = true // Enable streaming
+
+	// Marshal request
+	reqBody, err := json.Marshal(googleReq)
+	if err != nil {
+		streamingResp.Close()
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", g.config.BaseURL+"/v1beta/models/"+req.Model+":generateContent", bytes.NewBuffer(reqBody))
+	if err != nil {
+		streamingResp.Close()
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-goog-api-key", g.config.APIKey)
+
+	// Add custom headers
+	for key, value := range g.config.Headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	// Send request
+	resp, err := g.client.Do(httpReq)
+	if err != nil {
+		streamingResp.Close()
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	// Handle streaming response in goroutine
+	go func() {
+		defer resp.Body.Close()
+		defer streamingResp.Close()
+
+		reader := bufio.NewReader(resp.Body)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					streamingResp.DoneChan <- true
+					return
+				}
+				streamingResp.ErrorChan <- fmt.Errorf("failed to read stream: %w", err)
+				return
+			}
+
+			// Skip empty lines
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+
+			// Remove "data: " prefix
+			if strings.HasPrefix(line, "data: ") {
+				data := strings.TrimPrefix(line, "data: ")
+				if data == "[DONE]" {
+					streamingResp.DoneChan <- true
+					return
+				}
+
+				// Parse the JSON data
+				var streamResp struct {
+					Candidates []struct {
+						Content struct {
+							Parts []struct {
+								Text string `json:"text"`
+							} `json:"parts"`
+						} `json:"content"`
+					} `json:"candidates"`
+				}
+
+				if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
+					streamingResp.ErrorChan <- fmt.Errorf("failed to parse stream data: %w", err)
+					return
+				}
+
+				if len(streamResp.Candidates) > 0 && len(streamResp.Candidates[0].Content.Parts) > 0 {
+					streamingResp.ContentChan <- streamResp.Candidates[0].Content.Parts[0].Text
+				}
+			}
+		}
+	}()
+
+	return streamingResp, nil
 }
 
 // convertRequest converts our standard request to Google format
@@ -141,7 +238,7 @@ func (g *GoogleVendor) convertRequest(req *models.Request) *googleRequest {
 		GenerationConfig: googleGenerationConfig{
 			MaxOutputTokens: req.MaxTokens,
 			Temperature:     req.Temperature,
-			TopP:           req.TopP,
+			TopP:            req.TopP,
 		},
 	}
 
@@ -174,8 +271,9 @@ func (g *GoogleVendor) convertResponse(googleResp *googleResponse, model string)
 
 // Google API request/response structures
 type googleRequest struct {
-	Contents         []googleContent       `json:"contents"`
+	Contents         []googleContent        `json:"contents"`
 	GenerationConfig googleGenerationConfig `json:"generationConfig"`
+	Stream           bool                   `json:"stream"`
 }
 
 type googleContent struct {
@@ -189,12 +287,12 @@ type googlePart struct {
 type googleGenerationConfig struct {
 	MaxOutputTokens int     `json:"maxOutputTokens,omitempty"`
 	Temperature     float64 `json:"temperature,omitempty"`
-	TopP           float64 `json:"topP,omitempty"`
+	TopP            float64 `json:"topP,omitempty"`
 }
 
 type googleResponse struct {
-	Candidates      []googleCandidate    `json:"candidates"`
-	UsageMetadata   googleUsageMetadata  `json:"usageMetadata"`
+	Candidates    []googleCandidate   `json:"candidates"`
+	UsageMetadata googleUsageMetadata `json:"usageMetadata"`
 }
 
 type googleCandidate struct {
@@ -204,4 +302,4 @@ type googleCandidate struct {
 type googleUsageMetadata struct {
 	PromptTokenCount     int `json:"promptTokenCount"`
 	CandidatesTokenCount int `json:"candidatesTokenCount"`
-} 
+}

@@ -1,52 +1,77 @@
-.PHONY: test test-html test-coverage build clean setup help
+# Makefile for LLM Dispatcher
+
+.PHONY: help test build run setup clean fmt lint check pre-commit
 
 # Default target
-all: test
+help:
+	@echo "Available commands:"
+	@echo "  test        - Run tests with .env file loading"
+	@echo "  test-html   - Run tests with HTML coverage report"
+	@echo "  test-coverage - Run tests with detailed coverage"
+	@echo "  test-ci     - Run tests without .env (for CI)"
+	@echo "  build       - Build the application"
+	@echo "  run         - Run the example application"
+	@echo "  setup       - Setup environment and dependencies"
+	@echo "  clean       - Clean build artifacts"
+	@echo "  fmt         - Format code"
+	@echo "  lint        - Lint code"
+	@echo "  check       - Run fmt, lint, and test"
+	@echo "  pre-commit  - Run pre-commit checks (lint + test)"
+	@echo "  help        - Show this help message"
 
-# Run tests with environment variable loading
+# Run tests with .env file loading
 test:
 	@echo "🧪 Running tests with .env file loading..."
-	@go run scripts/test.go
+	@if [ -f .env ]; then \
+		export $$(cat .env | xargs) && go test -v -race -cover ./...; \
+	else \
+		echo "⚠️  No .env file found. Running tests without environment variables..."; \
+		go test -v -race -cover ./...; \
+	fi
 
 # Run tests with HTML coverage report
-test-html:
-	@echo "🧪 Running tests with HTML coverage report..."
-	@go run scripts/test.go --html
+test-html: test
+	@echo "📊 Generating HTML coverage report..."
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "📄 Coverage report saved to coverage.html"
 
 # Run tests with detailed coverage
 test-coverage:
-	@echo "🧪 Running tests with detailed coverage..."
-	@go test -coverprofile=coverage.out -covermode=atomic ./...
+	@echo "📊 Running tests with detailed coverage..."
+	@go test -v -race -coverprofile=coverage.out ./...
+	@echo "📊 Coverage summary:"
 	@go tool cover -func=coverage.out
-	@rm -f coverage.out
 
-# Run tests without .env loading (for CI)
+# Run tests without .env (for CI)
 test-ci:
-	@echo "🧪 Running tests in CI mode..."
-	@go test -v ./...
+	@echo "🧪 Running tests for CI (without .env)..."
+	@go test -v -race -cover ./...
 
-# Build the example
+# Build the application
 build:
-	@echo "🔨 Building example..."
-	@go build -o bin/example cmd/example/*.go
+	@echo "🔨 Building application..."
+	@go build -o bin/llmdispatcher cmd/example/main.go
 
-# Run the example
-run:
-	@echo "🚀 Running example..."
-	@go run cmd/example/*.go
-
-# Setup development environment
-setup:
-	@echo "🔧 Setting up development environment..."
-	@if [ ! -f .env ]; then \
-		echo "Creating .env file from template..."; \
-		cp cmd/example/env.example .env; \
-		echo "✅ Created .env file. Please edit it with your API keys."; \
+# Run the example application
+run: build
+	@echo "🚀 Running example application..."
+	@if [ -f .env ]; then \
+		export $$(cat .env | xargs) && ./bin/llmdispatcher; \
 	else \
-		echo "✅ .env file already exists."; \
+		echo "⚠️  No .env file found. Please create one or set environment variables."; \
+		echo "💡 Run 'make setup' to create a template .env file."; \
 	fi
-	@echo "📦 Installing dependencies..."
+
+# Setup environment and dependencies
+setup:
+	@echo "🔧 Setting up environment..."
 	@go mod tidy
+	@if [ ! -f .env ]; then \
+		cp cmd/example/env.example .env; \
+		echo "📝 Created .env file from template. Please edit it with your API keys."; \
+	else \
+		echo "📝 .env file already exists."; \
+	fi
 	@echo "✅ Setup complete!"
 
 # Clean build artifacts
@@ -54,7 +79,8 @@ clean:
 	@echo "🧹 Cleaning build artifacts..."
 	@rm -rf bin/
 	@rm -f coverage.out coverage.html
-	@go clean
+	@go clean -cache
+	@echo "✅ Clean complete!"
 
 # Format code
 fmt:
@@ -74,30 +100,7 @@ lint:
 # Check code quality
 check: fmt lint test
 
-# Show help
-help:
-	@echo "LLM Dispatcher - Available Commands"
-	@echo "=================================="
-	@echo ""
-	@echo "  make test          - Run tests with .env file loading"
-	@echo "  make test-html     - Run tests with HTML coverage report"
-	@echo "  make test-coverage - Run tests with detailed coverage"
-	@echo "  make test-ci       - Run tests without .env (for CI)"
-	@echo "  make build         - Build the example application"
-	@echo "  make run           - Run the example application"
-	@echo "  make setup         - Setup development environment"
-	@echo "  make clean         - Clean build artifacts"
-	@echo "  make fmt           - Format code with go fmt"
-	@echo "  make lint          - Lint code with go vet and golangci-lint"
-	@echo "  make check         - Run fmt, lint, and test"
-	@echo "  make help          - Show this help message"
-	@echo ""
-	@echo "Environment Setup:"
-	@echo "  cp cmd/example/env.example .env"
-	@echo "  # Edit .env and add your API keys"
-	@echo ""
-	@echo "Example Usage:"
-	@echo "  make setup         # First time setup"
-	@echo "  make check         # Run all quality checks"
-	@echo "  make test          # Run tests"
-	@echo "  make run           # Run example" 
+# Pre-commit checks
+pre-commit:
+	@echo "🔍 Running pre-commit checks..."
+	@./scripts/pre-commit.sh 

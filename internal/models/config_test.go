@@ -427,7 +427,7 @@ func TestCostOptimization_Validation(t *testing.T) {
 				MaxCost:     0.10,
 				PreferCheap: true,
 				VendorCosts: map[string]float64{
-					"openai":   0.002,
+					"openai":    0.002,
 					"anthropic": 0.003,
 					"google":    0.001,
 				},
@@ -475,7 +475,7 @@ func TestLatencyOptimization_Validation(t *testing.T) {
 				MaxLatency: 30 * time.Second,
 				PreferFast: true,
 				LatencyWeights: map[string]float64{
-					"openai":   1.0,
+					"openai":    1.0,
 					"anthropic": 1.2,
 					"google":    0.8,
 				},
@@ -518,16 +518,16 @@ func TestConfig_AdvancedRouting(t *testing.T) {
 			MaxCost:     0.10,
 			PreferCheap: true,
 			VendorCosts: map[string]float64{
-				"openai":   0.002,
+				"openai":    0.002,
 				"anthropic": 0.003,
 			},
 		},
 		LatencyOptimization: &LatencyOptimization{
 			Enabled:    true,
-			MaxLatency: 30*time.Second,
+			MaxLatency: 30 * time.Second,
 			PreferFast: true,
 			LatencyWeights: map[string]float64{
-				"openai":   1.0,
+				"openai":    1.0,
 				"anthropic": 1.2,
 			},
 		},
@@ -601,7 +601,7 @@ func TestDispatcherStats_AdvancedMetrics(t *testing.T) {
 		TotalCost:          0.50,
 		AverageCost:        0.005,
 		CostByVendor: map[string]float64{
-			"openai":   0.30,
+			"openai":    0.30,
 			"anthropic": 0.20,
 		},
 	}

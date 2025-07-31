@@ -219,38 +219,38 @@ func TestVendorConfig_Validate(t *testing.T) {
 func TestNewStreamingResponse(t *testing.T) {
 	model := "gpt-4"
 	vendor := "openai"
-	
+
 	streamingResp := NewStreamingResponse(model, vendor)
-	
+
 	if streamingResp.Model != model {
 		t.Errorf("Expected model %s, got %s", model, streamingResp.Model)
 	}
-	
+
 	if streamingResp.Vendor != vendor {
 		t.Errorf("Expected vendor %s, got %s", vendor, streamingResp.Vendor)
 	}
-	
+
 	if streamingResp.ContentChan == nil {
 		t.Error("Expected ContentChan to be initialized")
 	}
-	
+
 	if streamingResp.DoneChan == nil {
 		t.Error("Expected DoneChan to be initialized")
 	}
-	
+
 	if streamingResp.ErrorChan == nil {
 		t.Error("Expected ErrorChan to be initialized")
 	}
-	
+
 	// Check channel buffer sizes
 	if cap(streamingResp.ContentChan) != 100 {
 		t.Errorf("Expected ContentChan buffer size 100, got %d", cap(streamingResp.ContentChan))
 	}
-	
+
 	if cap(streamingResp.DoneChan) != 1 {
 		t.Errorf("Expected DoneChan buffer size 1, got %d", cap(streamingResp.DoneChan))
 	}
-	
+
 	if cap(streamingResp.ErrorChan) != 1 {
 		t.Errorf("Expected ErrorChan buffer size 1, got %d", cap(streamingResp.ErrorChan))
 	}
@@ -258,13 +258,13 @@ func TestNewStreamingResponse(t *testing.T) {
 
 func TestStreamingResponse_Close(t *testing.T) {
 	streamingResp := NewStreamingResponse("gpt-4", "openai")
-	
+
 	// Send some data to channels
 	streamingResp.ContentChan <- "test content"
-	
+
 	// Close the response
 	streamingResp.Close()
-	
+
 	// Verify channels are closed by trying to read from them
 	// Note: We need to drain the content first
 	select {
@@ -273,7 +273,7 @@ func TestStreamingResponse_Close(t *testing.T) {
 	default:
 		// No content to drain
 	}
-	
+
 	// Now check if channels are closed
 	select {
 	case _, ok := <-streamingResp.ContentChan:
@@ -283,7 +283,7 @@ func TestStreamingResponse_Close(t *testing.T) {
 	default:
 		// Channel is closed, which is what we expect
 	}
-	
+
 	select {
 	case _, ok := <-streamingResp.DoneChan:
 		if ok {
@@ -292,7 +292,7 @@ func TestStreamingResponse_Close(t *testing.T) {
 	default:
 		// Channel is closed, which is what we expect
 	}
-	
+
 	select {
 	case _, ok := <-streamingResp.ErrorChan:
 		if ok {
@@ -305,22 +305,22 @@ func TestStreamingResponse_Close(t *testing.T) {
 
 func TestStreamingResponse_Usage(t *testing.T) {
 	streamingResp := NewStreamingResponse("gpt-4", "openai")
-	
+
 	// Set usage data
 	streamingResp.Usage = Usage{
 		PromptTokens:     10,
 		CompletionTokens: 15,
 		TotalTokens:      25,
 	}
-	
+
 	if streamingResp.Usage.PromptTokens != 10 {
 		t.Errorf("Expected prompt tokens 10, got %d", streamingResp.Usage.PromptTokens)
 	}
-	
+
 	if streamingResp.Usage.CompletionTokens != 15 {
 		t.Errorf("Expected completion tokens 15, got %d", streamingResp.Usage.CompletionTokens)
 	}
-	
+
 	if streamingResp.Usage.TotalTokens != 25 {
 		t.Errorf("Expected total tokens 25, got %d", streamingResp.Usage.TotalTokens)
 	}
@@ -330,9 +330,9 @@ func TestStreamingResponse_CreatedAt(t *testing.T) {
 	before := time.Now()
 	streamingResp := NewStreamingResponse("gpt-4", "openai")
 	after := time.Now()
-	
+
 	if streamingResp.CreatedAt.Before(before) || streamingResp.CreatedAt.After(after) {
-		t.Errorf("CreatedAt %v should be between %v and %v", 
+		t.Errorf("CreatedAt %v should be between %v and %v",
 			streamingResp.CreatedAt, before, after)
 	}
 }

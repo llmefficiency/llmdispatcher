@@ -1,12 +1,14 @@
 package vendors
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/llmefficiency/llmdispatcher/internal/models"
@@ -196,4 +198,105 @@ func (o *OpenAI) GetCapabilities() models.Capabilities {
 func (o *OpenAI) IsAvailable(ctx context.Context) bool {
 	// Simple availability check - could be enhanced with actual health check
 	return o.config.APIKey != ""
+}
+
+// SendStreamingRequest sends a streaming request to OpenAI
+func (o *OpenAI) SendStreamingRequest(ctx context.Context, req *models.Request) (*models.StreamingResponse, error) {
+	// Create streaming response
+	streamingResp := models.NewStreamingResponse(req.Model, o.Name())
+
+	// Convert to OpenAI format with streaming enabled
+	openaiReq := OpenAIRequest{
+		Model:       req.Model,
+		Messages:    req.Messages,
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		TopP:        req.TopP,
+		Stream:      true, // Enable streaming
+		Stop:        req.Stop,
+		User:        req.User,
+	}
+
+	// Marshal request
+	reqBody, err := json.Marshal(openaiReq)
+	if err != nil {
+		streamingResp.Close()
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", o.config.BaseURL+"/chat/completions", bytes.NewBuffer(reqBody))
+	if err != nil {
+		streamingResp.Close()
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+o.config.APIKey)
+
+	// Add custom headers
+	for key, value := range o.config.Headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	// Send request
+	resp, err := o.client.Do(httpReq)
+	if err != nil {
+		streamingResp.Close()
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	// Handle streaming response in goroutine
+	go func() {
+		defer resp.Body.Close()
+		defer streamingResp.Close()
+
+		reader := bufio.NewReader(resp.Body)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					streamingResp.DoneChan <- true
+					return
+				}
+				streamingResp.ErrorChan <- fmt.Errorf("failed to read stream: %w", err)
+				return
+			}
+
+			// Skip empty lines
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+
+			// Remove "data: " prefix
+			if strings.HasPrefix(line, "data: ") {
+				data := strings.TrimPrefix(line, "data: ")
+				if data == "[DONE]" {
+					streamingResp.DoneChan <- true
+					return
+				}
+
+				// Parse the JSON data
+				var streamResp struct {
+					Choices []struct {
+						Delta struct {
+							Content string `json:"content"`
+						} `json:"delta"`
+					} `json:"choices"`
+				}
+
+				if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
+					streamingResp.ErrorChan <- fmt.Errorf("failed to parse stream data: %w", err)
+					return
+				}
+
+				if len(streamResp.Choices) > 0 && streamResp.Choices[0].Delta.Content != "" {
+					streamingResp.ContentChan <- streamResp.Choices[0].Delta.Content
+				}
+			}
+		}
+	}()
+
+	return streamingResp, nil
 }

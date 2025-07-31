@@ -236,4 +236,4 @@ func TestGoogleVendor_ConvertResponse_EmptyParts(t *testing.T) {
 	if response.Content != "" {
 		t.Errorf("Expected empty content, got %s", response.Content)
 	}
-} 
+}

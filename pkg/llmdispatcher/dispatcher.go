@@ -102,6 +102,56 @@ func (d *Dispatcher) Send(ctx context.Context, req *Request) (*Response, error) 
 	}, nil
 }
 
+// SendStreaming sends a streaming request to the appropriate vendor
+func (d *Dispatcher) SendStreaming(ctx context.Context, req *Request) (*StreamingResponse, error) {
+	internalReq := &models.Request{
+		Model:       req.Model,
+		Messages:    make([]models.Message, len(req.Messages)),
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		TopP:        req.TopP,
+		Stream:      req.Stream,
+		Stop:        req.Stop,
+		User:        req.User,
+	}
+
+	for i, msg := range req.Messages {
+		internalReq.Messages[i] = models.Message{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	internalStreamingResp, err := d.dispatcher.SendStreaming(ctx, internalReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create public streaming response
+	publicStreamingResp := NewStreamingResponse(internalStreamingResp.Model, internalStreamingResp.Vendor)
+
+	// Copy the channels and data
+	go func() {
+		defer publicStreamingResp.Close()
+		defer internalStreamingResp.Close()
+
+		for {
+			select {
+			case content := <-internalStreamingResp.ContentChan:
+				publicStreamingResp.ContentChan <- content
+			case done := <-internalStreamingResp.DoneChan:
+				publicStreamingResp.DoneChan <- done
+				return
+			case err := <-internalStreamingResp.ErrorChan:
+				publicStreamingResp.ErrorChan <- err
+				return
+			}
+		}
+	}()
+
+	return publicStreamingResp, nil
+}
+
 // RegisterVendor registers a vendor with the dispatcher
 func (d *Dispatcher) RegisterVendor(vendor Vendor) error {
 	// Create an adapter to convert between public and internal interfaces
@@ -225,6 +275,60 @@ func (a *internalVendorAdapter) IsAvailable(ctx context.Context) bool {
 	return a.vendor.IsAvailable(ctx)
 }
 
+func (a *internalVendorAdapter) SendStreamingRequest(ctx context.Context, req *models.Request) (*models.StreamingResponse, error) {
+	if a.vendor == nil {
+		return nil, fmt.Errorf("vendor is nil")
+	}
+	// Convert internal request to public request
+	publicReq := &Request{
+		Model:       req.Model,
+		Messages:    make([]Message, len(req.Messages)),
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		TopP:        req.TopP,
+		Stream:      req.Stream,
+		Stop:        req.Stop,
+		User:        req.User,
+	}
+
+	for i, msg := range req.Messages {
+		publicReq.Messages[i] = Message{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	// Call the public vendor's streaming method
+	publicStreamingResp, err := a.vendor.SendStreamingRequest(ctx, publicReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert public streaming response to internal streaming response
+	internalStreamingResp := models.NewStreamingResponse(req.Model, a.vendor.Name())
+
+	// Copy the channels and data
+	go func() {
+		defer internalStreamingResp.Close()
+		defer publicStreamingResp.Close()
+
+		for {
+			select {
+			case content := <-publicStreamingResp.ContentChan:
+				internalStreamingResp.ContentChan <- content
+			case done := <-publicStreamingResp.DoneChan:
+				internalStreamingResp.DoneChan <- done
+				return
+			case err := <-publicStreamingResp.ErrorChan:
+				internalStreamingResp.ErrorChan <- err
+				return
+			}
+		}
+	}()
+
+	return internalStreamingResp, nil
+}
+
 // vendorWrapper wraps the internal vendor interface
 type vendorWrapper struct {
 	vendor models.LLMVendor
@@ -284,4 +388,53 @@ func (w *vendorWrapper) GetCapabilities() Capabilities {
 
 func (w *vendorWrapper) IsAvailable(ctx context.Context) bool {
 	return w.vendor.IsAvailable(ctx)
+}
+
+func (w *vendorWrapper) SendStreamingRequest(ctx context.Context, req *Request) (*StreamingResponse, error) {
+	internalReq := &models.Request{
+		Model:       req.Model,
+		Messages:    make([]models.Message, len(req.Messages)),
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		TopP:        req.TopP,
+		Stream:      req.Stream,
+		Stop:        req.Stop,
+		User:        req.User,
+	}
+
+	for i, msg := range req.Messages {
+		internalReq.Messages[i] = models.Message{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	internalStreamingResp, err := w.vendor.SendStreamingRequest(ctx, internalReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create public streaming response
+	publicStreamingResp := NewStreamingResponse(internalStreamingResp.Model, internalStreamingResp.Vendor)
+
+	// Copy the channels and data
+	go func() {
+		defer publicStreamingResp.Close()
+		defer internalStreamingResp.Close()
+
+		for {
+			select {
+			case content := <-internalStreamingResp.ContentChan:
+				publicStreamingResp.ContentChan <- content
+			case done := <-internalStreamingResp.DoneChan:
+				publicStreamingResp.DoneChan <- done
+				return
+			case err := <-internalStreamingResp.ErrorChan:
+				publicStreamingResp.ErrorChan <- err
+				return
+			}
+		}
+	}()
+
+	return publicStreamingResp, nil
 }

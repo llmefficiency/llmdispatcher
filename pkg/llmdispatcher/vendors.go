@@ -147,3 +147,52 @@ func (a *vendorAdapter) GetCapabilities() Capabilities {
 func (a *vendorAdapter) IsAvailable(ctx context.Context) bool {
 	return a.vendor.IsAvailable(ctx)
 }
+
+func (a *vendorAdapter) SendStreamingRequest(ctx context.Context, req *Request) (*StreamingResponse, error) {
+	internalReq := &models.Request{
+		Model:       req.Model,
+		Messages:    make([]models.Message, len(req.Messages)),
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		TopP:        req.TopP,
+		Stream:      req.Stream,
+		Stop:        req.Stop,
+		User:        req.User,
+	}
+
+	for i, msg := range req.Messages {
+		internalReq.Messages[i] = models.Message{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	internalStreamingResp, err := a.vendor.SendStreamingRequest(ctx, internalReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create public streaming response
+	publicStreamingResp := NewStreamingResponse(internalStreamingResp.Model, internalStreamingResp.Vendor)
+
+	// Copy the channels and data
+	go func() {
+		defer publicStreamingResp.Close()
+		defer internalStreamingResp.Close()
+
+		for {
+			select {
+			case content := <-internalStreamingResp.ContentChan:
+				publicStreamingResp.ContentChan <- content
+			case done := <-internalStreamingResp.DoneChan:
+				publicStreamingResp.DoneChan <- done
+				return
+			case err := <-internalStreamingResp.ErrorChan:
+				publicStreamingResp.ErrorChan <- err
+				return
+			}
+		}
+	}()
+
+	return publicStreamingResp, nil
+}

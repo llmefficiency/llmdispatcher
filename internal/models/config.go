@@ -14,7 +14,7 @@ type Config struct {
 	EnableLogging  bool          `json:"enable_logging"`
 	EnableMetrics  bool          `json:"enable_metrics"`
 	// Advanced routing options
-	CostOptimization *CostOptimization `json:"cost_optimization,omitempty"`
+	CostOptimization    *CostOptimization    `json:"cost_optimization,omitempty"`
 	LatencyOptimization *LatencyOptimization `json:"latency_optimization,omitempty"`
 }
 
@@ -29,9 +29,9 @@ type CostOptimization struct {
 
 // LatencyOptimization defines latency-based routing configuration
 type LatencyOptimization struct {
-	Enabled        bool          `json:"enabled"`
-	MaxLatency     time.Duration `json:"max_latency"`
-	PreferFast     bool          `json:"prefer_fast"`
+	Enabled        bool               `json:"enabled"`
+	MaxLatency     time.Duration      `json:"max_latency"`
+	PreferFast     bool               `json:"prefer_fast"`
 	LatencyWeights map[string]float64 `json:"latency_weights"`
 }
 
@@ -67,9 +67,9 @@ type RoutingCondition struct {
 	CostThreshold    float64       `json:"cost_threshold,omitempty"`
 	LatencyThreshold time.Duration `json:"latency_threshold,omitempty"`
 	// Advanced conditions
-	UserID           string        `json:"user_id,omitempty"`
-	RequestType      string        `json:"request_type,omitempty"`
-	ContentLength    int           `json:"content_length,omitempty"`
+	UserID        string `json:"user_id,omitempty"`
+	RequestType   string `json:"request_type,omitempty"`
+	ContentLength int    `json:"content_length,omitempty"`
 }
 
 // DispatcherStats holds statistics about the dispatcher
@@ -81,9 +81,9 @@ type DispatcherStats struct {
 	AverageLatency     time.Duration          `json:"average_latency"`
 	LastRequestTime    time.Time              `json:"last_request_time"`
 	// Advanced metrics
-	TotalCost          float64                `json:"total_cost"`
-	AverageCost        float64                `json:"average_cost"`
-	CostByVendor       map[string]float64     `json:"cost_by_vendor"`
+	TotalCost    float64            `json:"total_cost"`
+	AverageCost  float64            `json:"average_cost"`
+	CostByVendor map[string]float64 `json:"cost_by_vendor"`
 }
 
 // VendorStats holds statistics for a specific vendor
@@ -94,7 +94,7 @@ type VendorStats struct {
 	AverageLatency time.Duration `json:"average_latency"`
 	LastUsed       time.Time     `json:"last_used"`
 	// Advanced metrics
-	TotalCost      float64 `json:"total_cost"`
-	AverageCost    float64 `json:"average_cost"`
-	TokenUsage     int64   `json:"token_usage"`
+	TotalCost   float64 `json:"total_cost"`
+	AverageCost float64 `json:"average_cost"`
+	TokenUsage  int64   `json:"token_usage"`
 }

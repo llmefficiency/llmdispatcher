@@ -34,6 +34,23 @@ func (m *MockVendor) IsAvailable(ctx context.Context) bool {
 	return m.available
 }
 
+func (m *MockVendor) SendStreamingRequest(ctx context.Context, req *Request) (*StreamingResponse, error) {
+	if m.shouldFail {
+		return nil, &MockError{message: "mock streaming error"}
+	}
+
+	streamingResp := NewStreamingResponse(req.Model, m.name)
+
+	// Simulate streaming response
+	go func() {
+		defer streamingResp.Close()
+		streamingResp.ContentChan <- "Mock streaming response"
+		streamingResp.DoneChan <- true
+	}()
+
+	return streamingResp, nil
+}
+
 type MockError struct {
 	message string
 }

@@ -277,4 +277,4 @@ func TestAzureOpenAIVendor_ConvertResponse_NilChoices(t *testing.T) {
 	if response.Content != "" {
 		t.Errorf("Expected empty content, got %s", response.Content)
 	}
-} 
+}
