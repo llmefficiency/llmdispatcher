@@ -1,0 +1,37 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4338ca;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="text" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0e7ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="300" fill="url(#bg)"/>
+  
+  <!-- Decorative elements -->
+  <circle cx="100" cy="100" r="20" fill="white" opacity="0.1"/>
+  <circle cx="1100" cy="200" r="30" fill="white" opacity="0.1"/>
+  <circle cx="200" cy="250" r="15" fill="white" opacity="0.1"/>
+  
+  <!-- Main title -->
+  <text x="600" y="120" text-anchor="middle" fill="url(#text)" font-family="Arial, sans-serif" font-size="48" font-weight="bold">LLM Dispatcher</text>
+  
+  <!-- Subtitle -->
+  <text x="600" y="160" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="24" opacity="0.9">Intelligent Multi-Vendor LLM Routing</text>
+  
+  <!-- Feature highlights -->
+  <text x="600" y="200" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" opacity="0.8">🚀 Multi-Vendor Support • 🔄 Intelligent Routing • ⚡ Streaming • 🛡️ Fallback</text>
+  
+  <!-- Tech stack -->
+  <text x="600" y="230" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" opacity="0.7">Go • OpenAI • Anthropic • Google • Azure • Streaming • Retry Logic</text>
+  
+  <!-- Version badge -->
+  <rect x="500" y="250" width="200" height="30" rx="15" fill="white" opacity="0.2"/>
+  <text x="600" y="270" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12">v0.1.0</text>
+</svg> 
