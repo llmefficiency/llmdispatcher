@@ -111,7 +111,7 @@ run-anthropic: build
 webservice:
 	@echo "🚀 Starting web service..."
 	@if [ -f .env ]; then \
-		export $$(cat .env | xargs) && go run apps/server/main.go; \
+		export $$(grep -v '^#' .env | grep -v '^$$' | xargs) && go run apps/server/main.go; \
 	else \
 		echo "⚠️  No .env file found. Please create one or set environment variables."; \
 		echo "💡 Run 'make setup' to create a template .env file."; \
