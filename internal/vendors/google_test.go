@@ -57,7 +57,6 @@ func TestGoogleVendor_GetCapabilities(t *testing.T) {
 	expectedModels := []string{
 		"gemini-1.5-pro",
 		"gemini-1.5-flash",
-		"gemini-1.0-pro",
 		"gemini-pro",
 		"gemini-pro-vision",
 	}

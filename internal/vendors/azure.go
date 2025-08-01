@@ -118,13 +118,7 @@ func (a *AzureOpenAIVendor) SendRequest(ctx context.Context, req *models.Request
 // GetCapabilities returns the vendor's capabilities
 func (a *AzureOpenAIVendor) GetCapabilities() models.Capabilities {
 	return models.Capabilities{
-		Models: []string{
-			"gpt-4",
-			"gpt-4-turbo",
-			"gpt-4o",
-			"gpt-35-turbo",
-			"gpt-35-turbo-16k",
-		},
+		Models:            models.GetVendorModels("azure"),
 		SupportsStreaming: true,
 		MaxTokens:         4096,
 		MaxInputTokens:    128000,

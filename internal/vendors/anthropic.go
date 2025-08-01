@@ -116,13 +116,7 @@ func (a *AnthropicVendor) SendRequest(ctx context.Context, req *models.Request) 
 // GetCapabilities returns the vendor's capabilities
 func (a *AnthropicVendor) GetCapabilities() models.Capabilities {
 	return models.Capabilities{
-		Models: []string{
-			"claude-3-opus-20240229",
-			"claude-3-sonnet-20240229",
-			"claude-3-haiku-20240307",
-			"claude-3-5-sonnet-20241022",
-			"claude-3-5-haiku-20241022",
-		},
+		Models:            models.GetVendorModels("anthropic"),
 		SupportsStreaming: true,
 		MaxTokens:         4096,
 		MaxInputTokens:    200000,

@@ -168,6 +168,104 @@ func (d *Dispatcher) SendStreaming(ctx context.Context, req *models.Request) (*m
 	return streamingResp, nil
 }
 
+// SendToVendor sends a request to a specific vendor
+func (d *Dispatcher) SendToVendor(ctx context.Context, vendorName string, req *models.Request) (*models.Response, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("%w: context cannot be nil", models.ErrInvalidRequest)
+	}
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", models.ErrInvalidRequest)
+	}
+
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("request validation failed: %w", err)
+	}
+
+	start := time.Now()
+
+	// Update stats
+	d.statsMutex.Lock()
+	d.stats.TotalRequests++
+	d.stats.LastRequestTime = time.Now()
+	d.statsMutex.Unlock()
+
+	// Get the specified vendor
+	vendor, exists := d.vendors[vendorName]
+	if !exists {
+		return nil, fmt.Errorf("vendor %s not found", vendorName)
+	}
+
+	// Check if vendor is available
+	if !vendor.IsAvailable(ctx) {
+		return nil, fmt.Errorf("vendor %s is not available", vendorName)
+	}
+
+	// Send request
+	response, err := d.sendWithRetry(ctx, vendor, req)
+	if err != nil {
+		d.updateStats(false, vendor.Name(), time.Since(start))
+		return nil, err
+	}
+
+	d.updateStats(true, vendor.Name(), time.Since(start))
+	return response, nil
+}
+
+// SendStreamingToVendor sends a streaming request to a specific vendor
+func (d *Dispatcher) SendStreamingToVendor(ctx context.Context, vendorName string, req *models.Request) (*models.StreamingResponse, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("%w: context cannot be nil", models.ErrInvalidRequest)
+	}
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", models.ErrInvalidRequest)
+	}
+
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("request validation failed: %w", err)
+	}
+
+	// Set streaming flag
+	req.Stream = true
+
+	start := time.Now()
+
+	// Update stats
+	d.statsMutex.Lock()
+	d.stats.TotalRequests++
+	d.stats.LastRequestTime = time.Now()
+	d.statsMutex.Unlock()
+
+	// Get the specified vendor
+	vendor, exists := d.vendors[vendorName]
+	if !exists {
+		return nil, fmt.Errorf("vendor %s not found", vendorName)
+	}
+
+	// Check if vendor is available
+	if !vendor.IsAvailable(ctx) {
+		return nil, fmt.Errorf("vendor %s is not available", vendorName)
+	}
+
+	// Check if vendor supports streaming
+	if !vendor.GetCapabilities().SupportsStreaming {
+		return nil, fmt.Errorf("vendor %s does not support streaming", vendorName)
+	}
+
+	// Send streaming request
+	streamingResp, err := vendor.SendStreamingRequest(ctx, req)
+	if err != nil {
+		d.updateStats(false, vendor.Name(), time.Since(start))
+		return nil, err
+	}
+
+	d.updateStats(true, vendor.Name(), time.Since(start))
+	return streamingResp, nil
+}
+
 // selectVendor determines which vendor should handle the request
 func (d *Dispatcher) selectVendor(ctx context.Context, req *models.Request) (models.LLMVendor, error) {
 	if len(d.vendors) == 0 {

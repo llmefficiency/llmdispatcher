@@ -408,7 +408,7 @@ func (l *Local) sendProcessStreamingRequest(ctx context.Context, req *models.Req
 // GetCapabilities returns the local model capabilities
 func (l *Local) GetCapabilities() models.Capabilities {
 	return models.Capabilities{
-		Models:            []string{"llama2", "llama2:7b", "llama2:13b", "llama2:70b", "codellama", "mistral", "mixtral"},
+		Models:            models.GetVendorModels("local"),
 		SupportsStreaming: true,
 		MaxTokens:         4096,
 		MaxInputTokens:    4096,

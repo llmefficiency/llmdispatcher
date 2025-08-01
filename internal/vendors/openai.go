@@ -189,13 +189,7 @@ func (o *OpenAI) SendRequest(ctx context.Context, req *models.Request) (*models.
 // GetCapabilities returns OpenAI's capabilities
 func (o *OpenAI) GetCapabilities() models.Capabilities {
 	return models.Capabilities{
-		Models: []string{
-			"gpt-4",
-			"gpt-4-turbo",
-			"gpt-4-turbo-preview",
-			"gpt-3.5-turbo",
-			"gpt-3.5-turbo-16k",
-		},
+		Models:            models.GetVendorModels("openai"),
 		SupportsStreaming: true,
 		MaxTokens:         4096,
 		MaxInputTokens:    128000,

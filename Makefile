@@ -1,6 +1,6 @@
 # Makefile for LLM Dispatcher
 
-.PHONY: help test build run setup clean fmt lint check pre-commit
+.PHONY: help test build run setup clean fmt lint check pre-commit webservice
 
 # Default target
 help:
@@ -14,6 +14,7 @@ help:
 	@echo "  run-vendor  - Run in vendor mode with default vendor"
 	@echo "  run-local   - Run in local mode with Ollama"
 	@echo "  run-anthropic - Run with Anthropic vendor"
+	@echo "  webservice  - Run the web service"
 	@echo "  setup       - Setup environment and dependencies"
 	@echo "  clean       - Clean build artifacts"
 	@echo "  fmt         - Format code"
@@ -92,6 +93,18 @@ run-anthropic: build
 		export $$(cat .env | xargs) && ./bin/llmdispatcher --vendor --vendor-override anthropic; \
 	else \
 		echo "⚠️  No .env file found. Please create one or set environment variables."; \
+	fi
+
+# Run the web service
+webservice:
+	@echo "🚀 Starting web service..."
+	@if [ -f .env ]; then \
+		export $$(cat .env | xargs) && go run cmd/webservice/main.go; \
+	else \
+		echo "⚠️  No .env file found. Please create one or set environment variables."; \
+		echo "💡 Run 'make setup' to create a template .env file."; \
+		echo "🌐 Web service will start with available vendors only."; \
+		go run cmd/webservice/main.go; \
 	fi
 
 # Setup environment and dependencies

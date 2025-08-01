@@ -117,13 +117,7 @@ func (g *GoogleVendor) SendRequest(ctx context.Context, req *models.Request) (*m
 // GetCapabilities returns the vendor's capabilities
 func (g *GoogleVendor) GetCapabilities() models.Capabilities {
 	return models.Capabilities{
-		Models: []string{
-			"gemini-1.5-pro",
-			"gemini-1.5-flash",
-			"gemini-1.0-pro",
-			"gemini-pro",
-			"gemini-pro-vision",
-		},
+		Models:            models.GetVendorModels("google"),
 		SupportsStreaming: true,
 		MaxTokens:         8192,
 		MaxInputTokens:    1000000,

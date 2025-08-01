@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Dispatcher Web Service</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+            min-height: 100vh;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 0;
+        }
+        .header h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .status-item {
+            background: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .status-healthy {
+            color: #28a745;
+        }
+        .status-unhealthy {
+            color: #dc3545;
+        }
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .chat-window {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .chat-window h2 {
+            color: #2c3e50;
+            margin-top: 0;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+        .vendor-selector {
+            margin-bottom: 0;
+        }
+        .vendor-selector label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .vendor-select {
+            width: 100%;
+            padding: 8px;
+            padding-right: 30px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 16px;
+        }
+        .vendor-select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        .vendor-select option:disabled {
+            color: #999;
+            font-style: italic;
+        }
+        .vendor-select option {
+            padding: 8px;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 0;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            background: white;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23667eea' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+        }
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.5;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 0;
+            flex-shrink: 0;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        .btn-secondary {
+            background: white;
+            color: #007bff;
+            border: 1px solid #007bff;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-secondary:hover {
+            background: #f8f9fa;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .response-area {
+            flex: 1;
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            overflow-y: auto;
+            max-height: 150px;
+            min-height: 100px;
+            position: relative;
+        }
+        .response-area.error {
+            background: #f8d7da;
+            border: 1px solid #dc3545;
+        }
+        .response-area.success {
+            background: #d4edda;
+            border: 1px solid #28a745;
+        }
+        .response-area.streaming {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+        }
+        .response-content {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            font-size: 14px;
+            color: #333;
+            min-height: 90px;
+        }
+        .response-placeholder {
+            color: #6c757d;
+            font-style: italic;
+            text-align: center;
+            font-size: 14px;
+            padding: 20px;
+        }
+        .response-content strong {
+            color: #007bff;
+            font-weight: 600;
+        }
+        .response-content .error-text {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        .response-content .success-text {
+            color: #28a745;
+            font-weight: 600;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .stats-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-top: 30px;
+            position: relative;
+            z-index: 1;
+        }
+        .stats-panel h3 {
+            color: #2c3e50;
+            margin-top: 0;
+            margin-bottom: 25px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 LLM Dispatcher Web Service</h1>
+            <div class="status-bar">
+                <div class="status-item" id="healthStatus">
+                    <span id="healthIcon">⏳</span> Checking...
+                </div>
+                <div class="status-item">
+                    <span id="vendorCount">0</span> Vendors Available
+                </div>
+            </div>
+        </div>
+
+    <div class="main-container">
+        <!-- Direct Chat Window -->
+        <div class="chat-window">
+            <h2>💬 Direct Chat</h2>
+            
+            <div class="vendor-selector">
+                <label for="directVendor">🎯 Vendor:</label>
+                <select id="directVendor" onchange="updateModels('direct')" class="vendor-select">
+                    <option value="">Loading vendors...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="directModel">🤖 Model:</label>
+                <select id="directModel" class="vendor-select">
+                    <option value="">Select a vendor first</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="directMessages">Message:</label>
+                <textarea id="directMessages" placeholder="Enter your message here...">Hello! Can you tell me a short joke?</textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="directTemperature">Temperature:</label>
+                    <input type="number" id="directTemperature" value="0.7" min="0" max="2" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="directMaxTokens">Max Tokens:</label>
+                    <input type="number" id="directMaxTokens" value="100" min="1">
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-primary" onclick="sendDirectRequest()">Send Request</button>
+                <button class="btn-secondary" onclick="clearResponse('direct')">Clear</button>
+            </div>
+
+            <div id="directResponse" class="response-area">
+                <div class="response-content" id="directContent">
+                    <div class="response-placeholder">Select a vendor and model, then click "Send Request" to get a response here.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Streaming Chat Window -->
+        <div class="chat-window">
+            <h2>🔄 Streaming Chat</h2>
+            
+            <div class="vendor-selector">
+                <label for="streamVendor">🎯 Vendor:</label>
+                <select id="streamVendor" onchange="updateModels('stream')" class="vendor-select">
+                    <option value="">Loading vendors...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="streamModel">🤖 Model:</label>
+                <select id="streamModel" class="vendor-select">
+                    <option value="">Select a vendor first</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="streamMessages">Message:</label>
+                <textarea id="streamMessages" placeholder="Enter your message here...">Write a short story about a robot learning to paint.</textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="streamTemperature">Temperature:</label>
+                    <input type="number" id="streamTemperature" value="0.8" min="0" max="2" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="streamMaxTokens">Max Tokens:</label>
+                    <input type="number" id="streamMaxTokens" value="200" min="1">
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-primary" onclick="sendStreamingRequest()">Start Streaming</button>
+                <button class="btn-danger" onclick="stopStreaming()">Stop Streaming</button>
+                <button class="btn-secondary" onclick="clearResponse('stream')">Clear</button>
+            </div>
+
+            <div id="streamResponse" class="response-area">
+                <div class="response-content" id="streamContent">
+                    <div class="response-placeholder">Select a vendor and model, then click "Start Streaming" to begin streaming response here.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Panel -->
+    <div class="stats-panel">
+        <h3>📊 Statistics</h3>
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-value">-</div>
+                <div class="stat-label">Total Requests</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">-</div>
+                <div class="stat-label">Successful</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">-</div>
+                <div class="stat-label">Failed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">-</div>
+                <div class="stat-label">Avg Latency</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Processing...</p>
+    </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api/v1';
+        let streamingController = null;
+        let availableVendors = [];
+        let vendorModels = {};
+
+        // Model configurations for different vendors (loaded from API)
+        let vendorModelConfigs = {};
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        async function loadModelConfigurations() {
+            try {
+                const response = await fetch(`${API_BASE}/models`);
+                const data = await response.json();
+                vendorModelConfigs = data.models;
+            } catch (error) {
+                console.error('Failed to load model configurations:', error);
+                // Fallback to default configurations if API fails
+                vendorModelConfigs = {
+                    'openai': ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k'],
+                    'anthropic': ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
+                    'google': ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro', 'gemini-pro-vision'],
+                    'azure': ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
+                    'local': ['llama2:7b', 'llama2:13b', 'llama2:70b', 'llama3:8b', 'llama3:70b', 'mistral:7b', 'codellama:7b', 'codellama:13b']
+                };
+            }
+        }
+
+        function updateHealthStatus(healthy, vendors = []) {
+            const healthStatus = document.getElementById('healthStatus');
+            const healthIcon = document.getElementById('healthIcon');
+            const vendorCount = document.getElementById('vendorCount');
+            
+            if (healthy) {
+                healthStatus.className = 'status-item status-healthy';
+                healthIcon.textContent = '✅';
+                healthStatus.innerHTML = '<span>✅</span> Healthy';
+                vendorCount.textContent = vendors.length;
+            } else {
+                healthStatus.className = 'status-item status-unhealthy';
+                healthIcon.textContent = '❌';
+                healthStatus.innerHTML = '<span>❌</span> Unhealthy';
+                vendorCount.textContent = '0';
+            }
+        }
+
+        function populateVendorSelect(selectId, vendors) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '<option value="">Select a vendor</option>';
+            
+            vendors.forEach(vendor => {
+                const option = document.createElement('option');
+                option.value = vendor.name;
+                
+                // Capitalize vendor name and add status
+                const vendorName = vendor.name.charAt(0).toUpperCase() + vendor.name.slice(1);
+                const status = vendor.enabled ? '✅ Enabled' : '❌ Disabled';
+                option.textContent = `${vendorName} ${status}`;
+                option.disabled = !vendor.enabled;
+                
+                // Add visual styling for disabled options
+                if (!vendor.enabled) {
+                    option.style.color = '#999';
+                    option.style.fontStyle = 'italic';
+                }
+                
+                select.appendChild(option);
+            });
+        }
+
+        function updateModels(type) {
+            const vendorSelect = document.getElementById(`${type}Vendor`);
+            const modelSelect = document.getElementById(`${type}Model`);
+            const selectedVendor = vendorSelect.value;
+            
+            modelSelect.innerHTML = '<option value="">Select a model</option>';
+            
+            if (selectedVendor && vendorModelConfigs[selectedVendor]) {
+                vendorModelConfigs[selectedVendor].forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = model;
+                    modelSelect.appendChild(option);
+                });
+                
+                // Add visual feedback
+                modelSelect.style.borderColor = '#28a745';
+                setTimeout(() => {
+                    modelSelect.style.borderColor = '#ddd';
+                }, 1000);
+            } else {
+                modelSelect.innerHTML = '<option value="">Select a vendor first</option>';
+            }
+        }
+
+        function clearResponse(type) {
+            const responseArea = document.getElementById(`${type}Response`);
+            const content = document.getElementById(`${type}Content`);
+            if (responseArea && content) {
+                responseArea.className = 'response-area';
+                content.innerHTML = `<div class="response-placeholder">${type === 'direct' ? 'Select a vendor and model, then click "Send Request" to get a response here.' : 'Select a vendor and model, then click "Start Streaming" to begin streaming response here.'}</div>`;
+            }
+        }
+
+        function showResponse(type, content, isError = false, isSuccess = false, isStreaming = false) {
+            const responseArea = document.getElementById(`${type}Response`);
+            const contentDiv = document.getElementById(`${type}Content`);
+            
+            if (responseArea && contentDiv) {
+                responseArea.className = 'response-area';
+                
+                if (isError) {
+                    responseArea.classList.add('error');
+                } else if (isSuccess) {
+                    responseArea.classList.add('success');
+                } else if (isStreaming) {
+                    responseArea.classList.add('streaming');
+                }
+                
+                contentDiv.innerHTML = content;
+            }
+        }
+
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    updateHealthStatus(true, data.vendors);
+                    
+                    // Get detailed vendor information
+                    const vendorsResponse = await fetch(`${API_BASE}/vendors`);
+                    const vendorsData = await vendorsResponse.json();
+                    
+                                         // Use vendor data from backend
+                     const vendors = vendorsData.vendors;
+                    
+                    availableVendors = vendors;
+                    populateVendorSelect('directVendor', vendors);
+                    populateVendorSelect('streamVendor', vendors);
+                    
+                    return true;
+                } else {
+                    updateHealthStatus(false);
+                    return false;
+                }
+            } catch (error) {
+                updateHealthStatus(false);
+                return false;
+            }
+        }
+
+        async function sendDirectRequest() {
+            const vendor = document.getElementById('directVendor').value;
+            const model = document.getElementById('directModel').value;
+            const messages = document.getElementById('directMessages').value;
+            const temperature = parseFloat(document.getElementById('directTemperature').value);
+            const maxTokens = parseInt(document.getElementById('directMaxTokens').value);
+
+            if (!vendor || !model || !messages.trim()) {
+                showResponse('direct', '<span class="error-text">❌ Please select a vendor, model, and enter a message.</span>', true);
+                return;
+            }
+
+            showLoading();
+            try {
+                const payload = {
+                    vendor: vendor,
+                    model: model,
+                    messages: [{ role: 'user', content: messages }],
+                    temperature: temperature,
+                    max_tokens: maxTokens
+                };
+
+                const response = await fetch(`${API_BASE}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    const content = `
+<strong>✅ Response:</strong>
+
+${data.data.content}
+
+<strong>📊 Details:</strong>
+• <strong>Vendor:</strong> ${data.data.vendor}
+• <strong>Model:</strong> ${data.data.model}
+• <strong>Tokens:</strong> ${data.data.usage.prompt_tokens} prompt + ${data.data.usage.completion_tokens} completion = ${data.data.usage.total_tokens} total
+                    `;
+                    showResponse('direct', content, false, true);
+                } else {
+                    showResponse('direct', `<span class="error-text">❌ Error: ${data.error}</span>`, true);
+                }
+            } catch (error) {
+                showResponse('direct', `<span class="error-text">❌ Network Error: ${error.message}</span>`, true);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function sendStreamingRequest() {
+            const vendor = document.getElementById('streamVendor').value;
+            const model = document.getElementById('streamModel').value;
+            const messages = document.getElementById('streamMessages').value;
+            const temperature = parseFloat(document.getElementById('streamTemperature').value);
+            const maxTokens = parseInt(document.getElementById('streamMaxTokens').value);
+
+            if (!vendor || !model || !messages.trim()) {
+                showResponse('stream', '<span class="error-text">❌ Please select a vendor, model, and enter a message.</span>', true);
+                return;
+            }
+
+            // Stop any existing stream
+            if (streamingController) {
+                streamingController.abort();
+            }
+
+            const responseArea = document.getElementById('streamResponse');
+            const contentDiv = document.getElementById('streamContent');
+            
+            responseArea.className = 'response-area streaming';
+            contentDiv.innerHTML = '<strong>🔄 Streaming...</strong><br><br>';
+
+            const payload = {
+                vendor: vendor,
+                model: model,
+                messages: [{ role: 'user', content: messages }],
+                temperature: temperature,
+                max_tokens: maxTokens
+            };
+
+            // Create AbortController for this request
+            streamingController = new AbortController();
+
+            fetch(`${API_BASE}/chat/completions/stream`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload),
+                signal: streamingController.signal
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                function readStream() {
+                    return reader.read().then(({ done, value }) => {
+                        if (done) {
+                            return;
+                        }
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        
+                        lines.forEach(line => {
+                            if (line.startsWith('data: ')) {
+                                const data = line.slice(6); // Remove 'data: ' prefix
+                                if (data.startsWith('[ERROR]')) {
+                                    contentDiv.innerHTML += `<div style="color: red;">${data}</div>`;
+                                } else if (data.trim() !== '') {
+                                    contentDiv.innerHTML += data;
+                                }
+                            }
+                        });
+                        
+                        return readStream();
+                    });
+                }
+                
+                return readStream();
+            })
+            .catch(error => {
+                if (error.name === 'AbortError') {
+                    contentDiv.innerHTML += '<br><div style="color: orange;">Streaming stopped by user</div>';
+                } else {
+                    contentDiv.innerHTML += `<br><div style="color: red;">Streaming error: ${error.message}</div>`;
+                }
+            });
+        }
+
+        function stopStreaming() {
+            if (streamingController) {
+                streamingController.abort();
+                streamingController = null;
+            }
+        }
+
+        function formatLatency(nanoseconds) {
+            if (!nanoseconds || nanoseconds === 0) return 'N/A';
+            
+            // Convert nanoseconds to appropriate unit
+            if (nanoseconds < 1000) {
+                return `${nanoseconds}ns`;
+            } else if (nanoseconds < 1000000) {
+                return `${(nanoseconds / 1000).toFixed(1)}μs`;
+            } else if (nanoseconds < 1000000000) {
+                return `${(nanoseconds / 1000000).toFixed(1)}ms`;
+            } else {
+                return `${(nanoseconds / 1000000000).toFixed(2)}s`;
+            }
+        }
+
+        async function updateStats() {
+            try {
+                const response = await fetch(`${API_BASE}/stats`);
+                const data = await response.json();
+                
+                const statsGrid = document.getElementById('statsGrid');
+                const statCards = statsGrid.children;
+                
+                statCards[0].querySelector('.stat-value').textContent = data.total_requests || 0;
+                statCards[1].querySelector('.stat-value').textContent = data.successful_requests || 0;
+                statCards[2].querySelector('.stat-value').textContent = data.failed_requests || 0;
+                statCards[3].querySelector('.stat-value').textContent = formatLatency(data.average_latency);
+            } catch (error) {
+                console.error('Failed to update stats:', error);
+            }
+        }
+
+        // Initialize the application
+        async function init() {
+            await checkHealth();
+            await loadModelConfigurations();
+            await updateStats();
+            
+            // Update stats every 10 seconds
+            setInterval(updateStats, 10000);
+        }
+
+        // Start the application
+        init();
+    </script>
+</body>
+</html> 
