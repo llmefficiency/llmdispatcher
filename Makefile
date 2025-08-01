@@ -62,6 +62,18 @@ build:
 	@echo "🔨 Building application..."
 	@go build -o bin/llmdispatcher cmd/example/cli.go
 
+# Build release binaries for multiple platforms
+build-release:
+	@echo "🔨 Building release binaries..."
+	@mkdir -p bin/release
+	@GOOS=linux GOARCH=amd64 go build -o bin/release/llmdispatcher-linux-amd64 cmd/example/cli.go
+	@GOOS=linux GOARCH=arm64 go build -o bin/release/llmdispatcher-linux-arm64 cmd/example/cli.go
+	@GOOS=darwin GOARCH=amd64 go build -o bin/release/llmdispatcher-darwin-amd64 cmd/example/cli.go
+	@GOOS=darwin GOARCH=arm64 go build -o bin/release/llmdispatcher-darwin-arm64 cmd/example/cli.go
+	@GOOS=windows GOARCH=amd64 go build -o bin/release/llmdispatcher-windows-amd64.exe cmd/example/cli.go
+	@GOOS=windows GOARCH=arm64 go build -o bin/release/llmdispatcher-windows-arm64.exe cmd/example/cli.go
+	@echo "✅ Release binaries built in bin/release/"
+
 # Run the example application
 run: build
 	@echo "🚀 Running example application..."
