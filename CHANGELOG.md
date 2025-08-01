@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-07-31
+
+### Added
+- Comprehensive local vendor support with HTTP and executable modes
+- New CLI interface with improved user experience
+- Web service implementation with REST API endpoints
+- Enhanced streaming functionality across all vendors
+- Improved vendor model configurations and capabilities
+- Better error handling and validation
+
+### Changed
+- Refactored main.go to cli.go for better code organization
+- Standardized streaming implementation across all vendors
+- Updated vendor model tests to match actual capabilities
+- Improved code maintainability and removed unnecessary code
+- Enhanced golangci-lint configuration and resolved linting issues
+
+### Fixed
+- Fixed vendor model test failures (OpenAI, Azure, Google)
+- Resolved streaming channel synchronization issues
+- Improved error handling in vendor implementations
+- Fixed CLI interface and streaming functionality
+
 ## [Unreleased]
 
 ### Added
