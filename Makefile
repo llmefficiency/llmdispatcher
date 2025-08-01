@@ -24,10 +24,10 @@ help:
 	@echo "  help        - Show this help message"
 	@echo ""
 	@echo "CLI Usage Examples:"
-	@echo "  go run cmd/example/cli.go --vendor"
-	@echo "  go run cmd/example/cli.go --vendor --vendor-override anthropic"
-	@echo "  go run cmd/example/cli.go --local"
-	@echo "  go run cmd/example/cli.go --local --model llama2:13b"
+	@echo "  go run apps/cli/cli.go --vendor"
+	@echo "  go run apps/cli/cli.go --vendor --vendor-override anthropic"
+	@echo "  go run apps/cli/cli.go --local"
+	@echo "  go run apps/cli/cli.go --local --model llama2:13b"
 
 # Run tests with .env file loading
 test:
@@ -60,18 +60,18 @@ test-ci:
 # Build the application
 build:
 	@echo "🔨 Building application..."
-	@go build -o bin/llmdispatcher cmd/example/cli.go
+	@go build -o bin/llmdispatcher apps/cli/cli.go
 
 # Build release binaries for multiple platforms
 build-release:
 	@echo "🔨 Building release binaries..."
 	@mkdir -p bin/release
-	@GOOS=linux GOARCH=amd64 go build -o bin/release/llmdispatcher-linux-amd64 cmd/example/cli.go
-	@GOOS=linux GOARCH=arm64 go build -o bin/release/llmdispatcher-linux-arm64 cmd/example/cli.go
-	@GOOS=darwin GOARCH=amd64 go build -o bin/release/llmdispatcher-darwin-amd64 cmd/example/cli.go
-	@GOOS=darwin GOARCH=arm64 go build -o bin/release/llmdispatcher-darwin-arm64 cmd/example/cli.go
-	@GOOS=windows GOARCH=amd64 go build -o bin/release/llmdispatcher-windows-amd64.exe cmd/example/cli.go
-	@GOOS=windows GOARCH=arm64 go build -o bin/release/llmdispatcher-windows-arm64.exe cmd/example/cli.go
+	@GOOS=linux GOARCH=amd64 go build -o bin/release/llmdispatcher-linux-amd64 apps/cli/cli.go
+	@GOOS=linux GOARCH=arm64 go build -o bin/release/llmdispatcher-linux-arm64 apps/cli/cli.go
+	@GOOS=darwin GOARCH=amd64 go build -o bin/release/llmdispatcher-darwin-amd64 apps/cli/cli.go
+	@GOOS=darwin GOARCH=arm64 go build -o bin/release/llmdispatcher-darwin-arm64 apps/cli/cli.go
+	@GOOS=windows GOARCH=amd64 go build -o bin/release/llmdispatcher-windows-amd64.exe apps/cli/cli.go
+	@GOOS=windows GOARCH=arm64 go build -o bin/release/llmdispatcher-windows-arm64.exe apps/cli/cli.go
 	@echo "✅ Release binaries built in bin/release/"
 
 # Run the example application
@@ -111,12 +111,12 @@ run-anthropic: build
 webservice:
 	@echo "🚀 Starting web service..."
 	@if [ -f .env ]; then \
-		export $$(cat .env | xargs) && go run cmd/webservice/main.go; \
+		export $$(cat .env | xargs) && go run apps/server/main.go; \
 	else \
 		echo "⚠️  No .env file found. Please create one or set environment variables."; \
 		echo "💡 Run 'make setup' to create a template .env file."; \
 		echo "🌐 Web service will start with available vendors only."; \
-		go run cmd/webservice/main.go; \
+		go run apps/server/main.go; \
 	fi
 
 # Setup environment and dependencies
@@ -124,7 +124,7 @@ setup:
 	@echo "🔧 Setting up environment..."
 	@go mod tidy
 	@if [ ! -f .env ]; then \
-		cp cmd/example/env.example .env; \
+		cp env.example .env; \
 		echo "📝 Created .env file from template. Please edit it with your API keys."; \
 	else \
 		echo "📝 .env file already exists."; \
