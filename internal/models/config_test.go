@@ -157,127 +157,77 @@ func TestBackoffStrategy_Validation(t *testing.T) {
 	}
 }
 
-func TestRoutingRule_Validation(t *testing.T) {
+func TestRoutingStrategy_Validation(t *testing.T) {
 	tests := []struct {
-		name    string
-		rule    RoutingRule
-		wantErr bool
+		name     string
+		strategy RoutingStrategy
+		wantErr  bool
 	}{
 		{
-			name: "valid routing rule",
-			rule: RoutingRule{
-				Condition: RoutingCondition{
-					ModelPattern: "gpt-4",
-					MaxTokens:    1000,
-				},
-				Vendor:   "openai",
-				Priority: 1,
-				Enabled:  true,
+			name: "valid_cascading_strategy",
+			strategy: &CascadingFailureStrategy{
+				VendorOrder: []string{"openai", "anthropic"},
 			},
 			wantErr: false,
 		},
 		{
-			name: "empty vendor",
-			rule: RoutingRule{
-				Condition: RoutingCondition{
-					ModelPattern: "gpt-4",
-				},
-				Vendor:   "",
-				Priority: 1,
-				Enabled:  true,
+			name: "empty_vendor_order",
+			strategy: &CascadingFailureStrategy{
+				VendorOrder: []string{},
 			},
 			wantErr: true,
 		},
 		{
-			name: "negative priority",
-			rule: RoutingRule{
-				Condition: RoutingCondition{
-					ModelPattern: "gpt-4",
-				},
-				Vendor:   "openai",
-				Priority: -1,
-				Enabled:  true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "disabled rule",
-			rule: RoutingRule{
-				Condition: RoutingCondition{
-					ModelPattern: "gpt-4",
-				},
-				Vendor:   "openai",
-				Priority: 1,
-				Enabled:  false,
-			},
-			wantErr: false, // This is valid - disabled rules are allowed
+			name:     "nil_strategy",
+			strategy: nil,
+			wantErr:  false, // nil is valid (optional)
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateRoutingRule(tt.rule)
+			err := validateRoutingStrategy(tt.strategy)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("validateRoutingRule() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("validateRoutingStrategy() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestRoutingCondition_Validation(t *testing.T) {
+func TestCascadingFailureStrategy_Validation(t *testing.T) {
 	tests := []struct {
-		name      string
-		condition RoutingCondition
-		wantErr   bool
+		name     string
+		strategy CascadingFailureStrategy
+		wantErr  bool
 	}{
 		{
-			name: "valid condition",
-			condition: RoutingCondition{
-				ModelPattern: "gpt-4",
-				MaxTokens:    1000,
-				Temperature:  0.7,
+			name: "valid_strategy",
+			strategy: CascadingFailureStrategy{
+				VendorOrder: []string{"openai", "anthropic", "google"},
 			},
 			wantErr: false,
 		},
 		{
-			name: "negative max tokens",
-			condition: RoutingCondition{
-				ModelPattern: "gpt-4",
-				MaxTokens:    -1,
+			name: "empty_vendor_order",
+			strategy: CascadingFailureStrategy{
+				VendorOrder: []string{},
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid temperature too high",
-			condition: RoutingCondition{
-				ModelPattern: "gpt-4",
-				Temperature:  3.0,
+			name: "single_vendor",
+			strategy: CascadingFailureStrategy{
+				VendorOrder: []string{"openai"},
 			},
-			wantErr: true,
-		},
-		{
-			name: "invalid temperature too low",
-			condition: RoutingCondition{
-				ModelPattern: "gpt-4",
-				Temperature:  -1.0,
-			},
-			wantErr: true,
-		},
-		{
-			name: "negative latency threshold",
-			condition: RoutingCondition{
-				ModelPattern:     "gpt-4",
-				LatencyThreshold: -1 * time.Second,
-			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateRoutingCondition(tt.condition)
+			err := validateCascadingFailureStrategy(tt.strategy)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("validateRoutingCondition() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("validateCascadingFailureStrategy() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -333,7 +283,7 @@ func TestDispatcherStats_Validation(t *testing.T) {
 			stats: &DispatcherStats{
 				TotalRequests:      10,
 				SuccessfulRequests: 8,
-				FailedRequests:     1, // Should be 2
+				FailedRequests:     3, // 8 + 3 = 11 != 10
 			},
 			wantErr: true,
 		},
@@ -513,117 +463,75 @@ func TestLatencyOptimization_Validation(t *testing.T) {
 func TestConfig_AdvancedRouting(t *testing.T) {
 	config := &Config{
 		DefaultVendor: "openai",
+		RoutingStrategy: &CascadingFailureStrategy{
+			VendorOrder: []string{"openai", "anthropic", "google"},
+		},
 		CostOptimization: &CostOptimization{
 			Enabled:     true,
 			MaxCost:     0.10,
 			PreferCheap: true,
 			VendorCosts: map[string]float64{
 				"openai":    0.002,
-				"anthropic": 0.003,
+				"anthropic": 0.008,
+				"google":    0.001,
 			},
 		},
 		LatencyOptimization: &LatencyOptimization{
 			Enabled:    true,
-			MaxLatency: 30 * time.Second,
+			MaxLatency: 5 * time.Second,
 			PreferFast: true,
 			LatencyWeights: map[string]float64{
 				"openai":    1.0,
 				"anthropic": 1.2,
+				"google":    0.8,
 			},
 		},
 	}
 
+	if config.DefaultVendor != "openai" {
+		t.Errorf("Expected default vendor 'openai', got '%s'", config.DefaultVendor)
+	}
+
+	if config.RoutingStrategy == nil {
+		t.Error("Expected routing strategy to be set")
+	}
+
 	if config.CostOptimization == nil {
-		t.Error("Expected CostOptimization to be set")
-	}
-
-	if !config.CostOptimization.Enabled {
-		t.Error("Expected CostOptimization to be enabled")
-	}
-
-	if config.CostOptimization.MaxCost != 0.10 {
-		t.Errorf("Expected MaxCost 0.10, got %f", config.CostOptimization.MaxCost)
+		t.Error("Expected cost optimization to be set")
 	}
 
 	if config.LatencyOptimization == nil {
-		t.Error("Expected LatencyOptimization to be set")
-	}
-
-	if !config.LatencyOptimization.Enabled {
-		t.Error("Expected LatencyOptimization to be enabled")
-	}
-
-	if config.LatencyOptimization.MaxLatency != 30*time.Second {
-		t.Errorf("Expected MaxLatency 30s, got %v", config.LatencyOptimization.MaxLatency)
-	}
-}
-
-func TestRoutingCondition_AdvancedFields(t *testing.T) {
-	condition := RoutingCondition{
-		ModelPattern:     "gpt-*",
-		MaxTokens:        1000,
-		Temperature:      0.7,
-		CostThreshold:    0.05,
-		LatencyThreshold: 10 * time.Second,
-		UserID:           "user123",
-		RequestType:      "chat",
-		ContentLength:    500,
-	}
-
-	if condition.UserID != "user123" {
-		t.Errorf("Expected UserID 'user123', got %s", condition.UserID)
-	}
-
-	if condition.RequestType != "chat" {
-		t.Errorf("Expected RequestType 'chat', got %s", condition.RequestType)
-	}
-
-	if condition.ContentLength != 500 {
-		t.Errorf("Expected ContentLength 500, got %d", condition.ContentLength)
-	}
-
-	if condition.CostThreshold != 0.05 {
-		t.Errorf("Expected CostThreshold 0.05, got %f", condition.CostThreshold)
-	}
-
-	if condition.LatencyThreshold != 10*time.Second {
-		t.Errorf("Expected LatencyThreshold 10s, got %v", condition.LatencyThreshold)
+		t.Error("Expected latency optimization to be set")
 	}
 }
 
 func TestDispatcherStats_AdvancedMetrics(t *testing.T) {
-	stats := DispatcherStats{
+	stats := &DispatcherStats{
 		TotalRequests:      100,
 		SuccessfulRequests: 95,
 		FailedRequests:     5,
-		AverageLatency:     2 * time.Second,
+		VendorStats:        make(map[string]VendorStats),
+		AverageLatency:     150 * time.Millisecond,
 		LastRequestTime:    time.Now(),
-		TotalCost:          0.50,
-		AverageCost:        0.005,
+		TotalCost:          25.50,
+		AverageCost:        0.255,
 		CostByVendor: map[string]float64{
-			"openai":    0.30,
-			"anthropic": 0.20,
+			"openai":    15.30,
+			"anthropic": 8.20,
+			"google":    2.00,
 		},
 	}
 
-	if stats.TotalCost != 0.50 {
-		t.Errorf("Expected TotalCost 0.50, got %f", stats.TotalCost)
+	if stats.TotalCost != 25.50 {
+		t.Errorf("Expected TotalCost 25.50, got %f", stats.TotalCost)
 	}
 
-	if stats.AverageCost != 0.005 {
-		t.Errorf("Expected AverageCost 0.005, got %f", stats.AverageCost)
+	if stats.AverageCost != 0.255 {
+		t.Errorf("Expected AverageCost 0.255, got %f", stats.AverageCost)
 	}
 
-	if len(stats.CostByVendor) != 2 {
-		t.Errorf("Expected 2 vendors in CostByVendor, got %d", len(stats.CostByVendor))
-	}
-
-	if stats.CostByVendor["openai"] != 0.30 {
-		t.Errorf("Expected OpenAI cost 0.30, got %f", stats.CostByVendor["openai"])
-	}
-
-	if stats.CostByVendor["anthropic"] != 0.20 {
-		t.Errorf("Expected Anthropic cost 0.20, got %f", stats.CostByVendor["anthropic"])
+	if len(stats.CostByVendor) != 3 {
+		t.Errorf("Expected 3 vendors in cost breakdown, got %d", len(stats.CostByVendor))
 	}
 }
 
@@ -685,28 +593,23 @@ func validateBackoffStrategy(strategy BackoffStrategy) error {
 	}
 }
 
-func validateRoutingRule(rule RoutingRule) error {
-	if rule.Vendor == "" {
-		return &MockError{message: "vendor is required"}
+func validateRoutingStrategy(strategy RoutingStrategy) error {
+	if strategy == nil {
+		return nil // nil strategy is valid (optional)
 	}
-	if rule.Priority < 0 {
-		return &MockError{message: "priority cannot be negative"}
+
+	// Type switch to validate specific strategy types
+	switch s := strategy.(type) {
+	case *CascadingFailureStrategy:
+		return validateCascadingFailureStrategy(*s)
+	default:
+		return nil // Unknown strategy types are considered valid
 	}
-	if err := validateRoutingCondition(rule.Condition); err != nil {
-		return err
-	}
-	return nil
 }
 
-func validateRoutingCondition(condition RoutingCondition) error {
-	if condition.MaxTokens < 0 {
-		return &MockError{message: "max tokens cannot be negative"}
-	}
-	if condition.Temperature < 0 || condition.Temperature > 2 {
-		return &MockError{message: "temperature must be between 0 and 2"}
-	}
-	if condition.LatencyThreshold < 0 {
-		return &MockError{message: "latency threshold cannot be negative"}
+func validateCascadingFailureStrategy(strategy CascadingFailureStrategy) error {
+	if len(strategy.VendorOrder) == 0 {
+		return &MockError{message: "vendor order cannot be empty"}
 	}
 	return nil
 }

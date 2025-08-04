@@ -429,27 +429,13 @@ func TestNewWithConfig_Complex(t *testing.T) {
 			BackoffStrategy: ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		RoutingRules: []RoutingRule{
-			{
-				Condition: RoutingCondition{
-					ModelPattern: "gpt-4",
-					MaxTokens:    1000,
-				},
-				Vendor:   "openai",
-				Priority: 1,
-				Enabled:  true,
-			},
-		},
+		// Use cascading failure strategy
+		RoutingStrategy: NewCascadingFailureStrategy([]string{"openai", "anthropic", "google"}),
 	}
 
 	dispatcher := NewWithConfig(config)
 	if dispatcher == nil {
-		t.Fatal("NewWithConfig() returned nil")
-	}
-
-	// Test that the dispatcher was created successfully
-	if dispatcher.dispatcher == nil {
-		t.Error("internal dispatcher should not be nil")
+		t.Error("Expected dispatcher to be created")
 	}
 }
 

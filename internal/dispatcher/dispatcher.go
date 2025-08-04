@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sort"
 	"sync"
 	"time"
 
@@ -64,19 +63,18 @@ func (d *Dispatcher) RegisterVendor(vendor models.LLMVendor) error {
 	return nil
 }
 
-// Send sends a request to the appropriate vendor based on routing rules
+// Send sends a request to the appropriate vendor based on routing strategy
 func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Response, error) {
 	if ctx == nil {
-		return nil, fmt.Errorf("%w: context cannot be nil", models.ErrInvalidRequest)
+		return nil, models.ErrInvalidRequest
 	}
 
 	if req == nil {
-		return nil, fmt.Errorf("%w: request cannot be nil", models.ErrInvalidRequest)
+		return nil, models.ErrInvalidRequest
 	}
 
-	// Validate request
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("request validation failed: %w", err)
+		return nil, fmt.Errorf("%w: %v", models.ErrInvalidRequest, err)
 	}
 
 	start := time.Now()
@@ -94,14 +92,29 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 		defer cancel()
 	}
 
-	// Determine which vendor to use
+	// Use routing strategy if available
+	if d.config.RoutingStrategy != nil {
+		vendor, err := d.config.RoutingStrategy.SelectVendor(ctx, req, d.vendors)
+		if err != nil {
+			d.updateStats(false, "", time.Since(start))
+			return nil, fmt.Errorf("routing strategy failed: %w", err)
+		}
+		response, err := d.sendWithRetry(ctx, vendor, req)
+		if err != nil {
+			d.updateStats(false, vendor.Name(), time.Since(start))
+			return nil, err
+		}
+		d.updateStats(true, vendor.Name(), time.Since(start))
+		return response, nil
+	}
+
+	// Fallback to default vendor selection logic
 	vendor, err := d.selectVendor(ctx, req)
 	if err != nil {
 		d.updateStats(false, "", time.Since(start))
 		return nil, fmt.Errorf("failed to select vendor: %w", err)
 	}
 
-	// Send request with retry logic
 	response, err := d.sendWithRetry(ctx, vendor, req)
 	if err != nil {
 		d.updateStats(false, vendor.Name(), time.Since(start))
@@ -272,16 +285,6 @@ func (d *Dispatcher) selectVendor(ctx context.Context, req *models.Request) (mod
 		return nil, models.ErrNoVendorsRegistered
 	}
 
-	// Check routing rules first
-	if len(d.config.RoutingRules) > 0 {
-		if vendor := d.applyRoutingRules(req); vendor != nil {
-			if vendor.IsAvailable(ctx) {
-				return vendor, nil
-			}
-			d.logger.Printf("Vendor %s from routing rule is not available", vendor.Name())
-		}
-	}
-
 	// Use default vendor if specified
 	if d.config.DefaultVendor != "" {
 		if vendor, exists := d.vendors[d.config.DefaultVendor]; exists {
@@ -313,53 +316,6 @@ func (d *Dispatcher) selectVendor(ctx context.Context, req *models.Request) (mod
 	}
 
 	return nil, models.ErrVendorUnavailable
-}
-
-// applyRoutingRules applies routing rules to determine the appropriate vendor
-func (d *Dispatcher) applyRoutingRules(req *models.Request) models.LLMVendor {
-	// Sort rules by priority (higher priority first)
-	rules := make([]models.RoutingRule, len(d.config.RoutingRules))
-	copy(rules, d.config.RoutingRules)
-	sort.Slice(rules, func(i, j int) bool {
-		return rules[i].Priority > rules[j].Priority
-	})
-
-	for _, rule := range rules {
-		if !rule.Enabled {
-			continue
-		}
-
-		if d.matchesCondition(req, rule.Condition) {
-			if vendor, exists := d.vendors[rule.Vendor]; exists {
-				return vendor
-			}
-		}
-	}
-
-	return nil
-}
-
-// matchesCondition checks if a request matches a routing condition
-func (d *Dispatcher) matchesCondition(req *models.Request, condition models.RoutingCondition) bool {
-	// Check model pattern
-	if condition.ModelPattern != "" {
-		// Simple pattern matching - could be enhanced with regex
-		if req.Model != condition.ModelPattern {
-			return false
-		}
-	}
-
-	// Check max tokens
-	if condition.MaxTokens > 0 && req.MaxTokens > condition.MaxTokens {
-		return false
-	}
-
-	// Check temperature
-	if condition.Temperature > 0 && req.Temperature > condition.Temperature {
-		return false
-	}
-
-	return true
 }
 
 // sendWithRetry sends a request with retry logic

@@ -72,7 +72,7 @@ func NewWebService() *WebService {
 	config := &models.Config{
 		DefaultVendor:  "openai",
 		FallbackVendor: "anthropic",
-		Timeout:        60 * time.Second,
+		Timeout:        30 * time.Second,
 		EnableLogging:  true,
 		EnableMetrics:  true,
 		RetryPolicy: &models.RetryPolicy{
@@ -80,23 +80,9 @@ func NewWebService() *WebService {
 			BackoffStrategy: models.ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		RoutingRules: []models.RoutingRule{
-			{
-				Condition: models.RoutingCondition{
-					ModelPattern: "gpt-4",
-				},
-				Vendor:   "openai",
-				Priority: 1,
-				Enabled:  true,
-			},
-			{
-				Condition: models.RoutingCondition{
-					ModelPattern: "claude",
-				},
-				Vendor:   "anthropic",
-				Priority: 1,
-				Enabled:  true,
-			},
+		// Use cascading failure strategy
+		RoutingStrategy: &models.CascadingFailureStrategy{
+			VendorOrder: []string{"openai", "anthropic", "google"},
 		},
 	}
 

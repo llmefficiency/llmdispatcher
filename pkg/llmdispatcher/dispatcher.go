@@ -49,6 +49,17 @@ func NewWithConfig(config *Config) *Dispatcher {
 				LatencyWeights: config.LatencyOptimization.LatencyWeights,
 			}
 		}
+
+		// Copy routing strategy if provided
+		if config.RoutingStrategy != nil {
+			// Convert public routing strategy to internal one
+			switch strategy := config.RoutingStrategy.(type) {
+			case *CascadingFailureStrategy:
+				internalConfig.RoutingStrategy = &models.CascadingFailureStrategy{
+					VendorOrder: strategy.VendorOrder,
+				}
+			}
+		}
 	}
 
 	if config != nil && config.RetryPolicy != nil {
@@ -56,24 +67,6 @@ func NewWithConfig(config *Config) *Dispatcher {
 			MaxRetries:      config.RetryPolicy.MaxRetries,
 			BackoffStrategy: models.BackoffStrategy(config.RetryPolicy.BackoffStrategy),
 			RetryableErrors: config.RetryPolicy.RetryableErrors,
-		}
-	}
-
-	if config != nil && len(config.RoutingRules) > 0 {
-		internalConfig.RoutingRules = make([]models.RoutingRule, len(config.RoutingRules))
-		for i, rule := range config.RoutingRules {
-			internalConfig.RoutingRules[i] = models.RoutingRule{
-				Condition: models.RoutingCondition{
-					ModelPattern:     rule.Condition.ModelPattern,
-					MaxTokens:        rule.Condition.MaxTokens,
-					Temperature:      rule.Condition.Temperature,
-					CostThreshold:    rule.Condition.CostThreshold,
-					LatencyThreshold: rule.Condition.LatencyThreshold,
-				},
-				Vendor:   rule.Vendor,
-				Priority: rule.Priority,
-				Enabled:  rule.Enabled,
-			}
 		}
 	}
 

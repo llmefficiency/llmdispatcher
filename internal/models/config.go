@@ -1,22 +1,63 @@
 package models
 
 import (
+	"context"
+	"fmt"
 	"time"
 )
 
 // Config holds the main dispatcher configuration
 // This is identical to pkg/llmdispatcher/types.go Config to avoid import cycles
 type Config struct {
-	DefaultVendor  string        `json:"default_vendor"`
-	FallbackVendor string        `json:"fallback_vendor,omitempty"`
-	RetryPolicy    *RetryPolicy  `json:"retry_policy,omitempty"`
-	RoutingRules   []RoutingRule `json:"routing_rules,omitempty"`
-	Timeout        time.Duration `json:"timeout,omitempty"`
-	EnableLogging  bool          `json:"enable_logging"`
-	EnableMetrics  bool          `json:"enable_metrics"`
+	DefaultVendor   string          `json:"default_vendor"`
+	FallbackVendor  string          `json:"fallback_vendor,omitempty"`
+	RetryPolicy     *RetryPolicy    `json:"retry_policy,omitempty"`
+	Timeout         time.Duration   `json:"timeout,omitempty"`
+	EnableLogging   bool            `json:"enable_logging"`
+	EnableMetrics   bool            `json:"enable_metrics"`
+	RoutingStrategy RoutingStrategy `json:"routing_strategy,omitempty"`
 	// Advanced routing options
 	CostOptimization    *CostOptimization    `json:"cost_optimization,omitempty"`
 	LatencyOptimization *LatencyOptimization `json:"latency_optimization,omitempty"`
+}
+
+// RoutingStrategy defines how requests should be routed to vendors
+type RoutingStrategy interface {
+	// SelectVendor selects the next vendor to try based on the request and available vendors
+	SelectVendor(ctx context.Context, req *Request, vendors map[string]LLMVendor) (LLMVendor, error)
+
+	// Name returns the name of the routing strategy
+	Name() string
+}
+
+// CascadingFailureStrategy implements a simple fallback strategy
+// It tries vendors in order until one succeeds
+type CascadingFailureStrategy struct {
+	VendorOrder []string `json:"vendor_order"`
+}
+
+// NewCascadingFailureStrategy creates a new cascading failure strategy
+func NewCascadingFailureStrategy(vendorOrder []string) *CascadingFailureStrategy {
+	return &CascadingFailureStrategy{
+		VendorOrder: vendorOrder,
+	}
+}
+
+// Name returns the strategy name
+func (c *CascadingFailureStrategy) Name() string {
+	return "cascading_failure"
+}
+
+// SelectVendor selects the first available vendor in the order
+func (c *CascadingFailureStrategy) SelectVendor(ctx context.Context, req *Request, vendors map[string]LLMVendor) (LLMVendor, error) {
+	for _, vendorName := range c.VendorOrder {
+		if vendor, exists := vendors[vendorName]; exists {
+			if vendor.IsAvailable(ctx) {
+				return vendor, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no available vendors in cascading strategy")
 }
 
 // CostOptimization defines cost-based routing configuration
@@ -51,27 +92,6 @@ const (
 	LinearBackoff      BackoffStrategy = "linear"
 	FixedBackoff       BackoffStrategy = "fixed"
 )
-
-// RoutingRule defines how requests should be routed to vendors
-type RoutingRule struct {
-	Condition RoutingCondition `json:"condition"`
-	Vendor    string           `json:"vendor"`
-	Priority  int              `json:"priority"`
-	Enabled   bool             `json:"enabled"`
-}
-
-// RoutingCondition defines when a routing rule should be applied
-type RoutingCondition struct {
-	ModelPattern     string        `json:"model_pattern,omitempty"`
-	MaxTokens        int           `json:"max_tokens,omitempty"`
-	Temperature      float64       `json:"temperature,omitempty"`
-	CostThreshold    float64       `json:"cost_threshold,omitempty"`
-	LatencyThreshold time.Duration `json:"latency_threshold,omitempty"`
-	// Advanced conditions
-	UserID        string `json:"user_id,omitempty"`
-	RequestType   string `json:"request_type,omitempty"`
-	ContentLength int    `json:"content_length,omitempty"`
-}
 
 // DispatcherStats holds statistics about the dispatcher
 type DispatcherStats struct {

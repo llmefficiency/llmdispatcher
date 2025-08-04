@@ -114,24 +114,8 @@ func main() {
 			BackoffStrategy: llmdispatcher.ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		RoutingRules: []llmdispatcher.RoutingRule{
-			{
-				Condition: llmdispatcher.RoutingCondition{
-					ModelPattern: "gpt-4",
-				},
-				Vendor:   "openai",
-				Priority: 1,
-				Enabled:  true,
-			},
-			{
-				Condition: llmdispatcher.RoutingCondition{
-					ModelPattern: "claude",
-				},
-				Vendor:   "anthropic",
-				Priority: 1,
-				Enabled:  true,
-			},
-		},
+		// Use cascading failure strategy
+		RoutingStrategy: llmdispatcher.NewCascadingFailureStrategy([]string{"openai", "anthropic", "google"}),
 	}
 
 	dispatcher := llmdispatcher.NewWithConfig(config)

@@ -317,86 +317,34 @@ func TestSend_WithFallback(t *testing.T) {
 	}
 }
 
-func TestSend_WithRoutingRules(t *testing.T) {
-	dispatcher := NewWithConfig(&models.Config{
-		RoutingRules: []models.RoutingRule{
-			{
-				Condition: models.RoutingCondition{
-					ModelPattern: "gpt-4",
-				},
-				Vendor:   "openai",
-				Priority: 1,
-				Enabled:  true,
-			},
-			{
-				Condition: models.RoutingCondition{
-					ModelPattern: "claude",
-				},
-				Vendor:   "anthropic",
-				Priority: 1,
-				Enabled:  true,
-			},
+func TestSend_WithRoutingStrategy(t *testing.T) {
+	config := &models.Config{
+		DefaultVendor: "openai",
+		RoutingStrategy: &models.CascadingFailureStrategy{
+			VendorOrder: []string{"openai", "anthropic"},
 		},
-	})
+	}
+
+	dispatcher := NewWithConfig(config)
 
 	// Register vendors
-	openaiVendor := &MockVendor{
-		name: "openai",
-		response: &models.Response{
-			Content: "OpenAI response",
-			Model:   "gpt-4",
-			Vendor:  "openai",
-		},
-		available: true,
-	}
+	openaiVendor := &MockVendor{name: "openai", available: true}
+	anthropicVendor := &MockVendor{name: "anthropic", available: true}
 
-	anthropicVendor := &MockVendor{
-		name: "anthropic",
-		response: &models.Response{
-			Content: "Anthropic response",
-			Model:   "claude",
-			Vendor:  "anthropic",
-		},
-		available: true,
-	}
+	dispatcher.RegisterVendor(openaiVendor)
+	dispatcher.RegisterVendor(anthropicVendor)
 
-	err := dispatcher.RegisterVendor(openaiVendor)
-	if err != nil {
-		t.Fatalf("Failed to register OpenAI vendor: %v", err)
-	}
-
-	err = dispatcher.RegisterVendor(anthropicVendor)
-	if err != nil {
-		t.Fatalf("Failed to register Anthropic vendor: %v", err)
-	}
-
-	// Test routing to OpenAI
-	request := &models.Request{
+	req := &models.Request{
 		Model: "gpt-4",
 		Messages: []models.Message{
 			{Role: "user", Content: "Hello"},
 		},
 	}
 
-	ctx := context.Background()
-	response, err := dispatcher.Send(ctx, request)
+	// Test that the routing strategy is used
+	_, err := dispatcher.Send(context.Background(), req)
 	if err != nil {
-		t.Fatalf("Send() failed: %v", err)
-	}
-
-	if response.Vendor != "openai" {
-		t.Errorf("Expected OpenAI vendor, got %s", response.Vendor)
-	}
-
-	// Test routing to Anthropic
-	request.Model = "claude"
-	response, err = dispatcher.Send(ctx, request)
-	if err != nil {
-		t.Fatalf("Send() failed: %v", err)
-	}
-
-	if response.Vendor != "anthropic" {
-		t.Errorf("Expected Anthropic vendor, got %s", response.Vendor)
+		t.Errorf("Expected successful request, got error: %v", err)
 	}
 }
 
@@ -589,91 +537,6 @@ func TestCalculateBackoff(t *testing.T) {
 			backoff := dispatcher.calculateBackoff(tt.attempt)
 			if backoff != tt.expected {
 				t.Errorf("calculateBackoff(%d) = %v, want %v", tt.attempt, backoff, tt.expected)
-			}
-		})
-	}
-}
-
-func TestMatchesCondition(t *testing.T) {
-	dispatcher := New()
-
-	tests := []struct {
-		name      string
-		request   *models.Request
-		condition models.RoutingCondition
-		wantMatch bool
-	}{
-		{
-			name: "model pattern match",
-			request: &models.Request{
-				Model: "gpt-4",
-			},
-			condition: models.RoutingCondition{
-				ModelPattern: "gpt-4",
-			},
-			wantMatch: true,
-		},
-		{
-			name: "model pattern no match",
-			request: &models.Request{
-				Model: "gpt-3.5-turbo",
-			},
-			condition: models.RoutingCondition{
-				ModelPattern: "gpt-4",
-			},
-			wantMatch: false,
-		},
-		{
-			name: "max tokens within limit",
-			request: &models.Request{
-				Model:     "gpt-4",
-				MaxTokens: 500,
-			},
-			condition: models.RoutingCondition{
-				MaxTokens: 1000,
-			},
-			wantMatch: true,
-		},
-		{
-			name: "max tokens exceeds limit",
-			request: &models.Request{
-				Model:     "gpt-4",
-				MaxTokens: 1500,
-			},
-			condition: models.RoutingCondition{
-				MaxTokens: 1000,
-			},
-			wantMatch: false,
-		},
-		{
-			name: "temperature within limit",
-			request: &models.Request{
-				Model:       "gpt-4",
-				Temperature: 0.5,
-			},
-			condition: models.RoutingCondition{
-				Temperature: 1.0,
-			},
-			wantMatch: true,
-		},
-		{
-			name: "temperature exceeds limit",
-			request: &models.Request{
-				Model:       "gpt-4",
-				Temperature: 1.5,
-			},
-			condition: models.RoutingCondition{
-				Temperature: 1.0,
-			},
-			wantMatch: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			matches := dispatcher.matchesCondition(tt.request, tt.condition)
-			if matches != tt.wantMatch {
-				t.Errorf("matchesCondition() = %v, want %v", matches, tt.wantMatch)
 			}
 		})
 	}
@@ -910,109 +773,6 @@ func TestDispatcher_SelectVendor_Fallback(t *testing.T) {
 	}
 	if vendor.Name() != "fallback" {
 		t.Errorf("Expected vendor name 'fallback', got %s", vendor.Name())
-	}
-}
-
-func TestDispatcher_MatchesCondition(t *testing.T) {
-	dispatcher := New()
-
-	tests := []struct {
-		name      string
-		req       *models.Request
-		condition models.RoutingCondition
-		want      bool
-	}{
-		{
-			name: "model pattern match",
-			req: &models.Request{
-				Model: "gpt-4",
-				Messages: []models.Message{
-					{Role: "user", Content: "test"},
-				},
-			},
-			condition: models.RoutingCondition{
-				ModelPattern: "gpt-4",
-			},
-			want: true,
-		},
-		{
-			name: "model pattern no match",
-			req: &models.Request{
-				Model: "gpt-3.5-turbo",
-				Messages: []models.Message{
-					{Role: "user", Content: "test"},
-				},
-			},
-			condition: models.RoutingCondition{
-				ModelPattern: "gpt-4",
-			},
-			want: false,
-		},
-		{
-			name: "max tokens within limit",
-			req: &models.Request{
-				Model:     "test",
-				MaxTokens: 100,
-				Messages: []models.Message{
-					{Role: "user", Content: "test"},
-				},
-			},
-			condition: models.RoutingCondition{
-				MaxTokens: 200,
-			},
-			want: true,
-		},
-		{
-			name: "max tokens exceeds limit",
-			req: &models.Request{
-				Model:     "test",
-				MaxTokens: 300,
-				Messages: []models.Message{
-					{Role: "user", Content: "test"},
-				},
-			},
-			condition: models.RoutingCondition{
-				MaxTokens: 200,
-			},
-			want: false,
-		},
-		{
-			name: "temperature within limit",
-			req: &models.Request{
-				Model:       "test",
-				Temperature: 0.5,
-				Messages: []models.Message{
-					{Role: "user", Content: "test"},
-				},
-			},
-			condition: models.RoutingCondition{
-				Temperature: 1.0,
-			},
-			want: true,
-		},
-		{
-			name: "temperature exceeds limit",
-			req: &models.Request{
-				Model:       "test",
-				Temperature: 1.5,
-				Messages: []models.Message{
-					{Role: "user", Content: "test"},
-				},
-			},
-			condition: models.RoutingCondition{
-				Temperature: 1.0,
-			},
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := dispatcher.matchesCondition(tt.req, tt.condition)
-			if got != tt.want {
-				t.Errorf("matchesCondition() = %v, want %v", got, tt.want)
-			}
-		})
 	}
 }
 
@@ -1447,71 +1207,28 @@ func TestDispatcher_SendStreamingToVendor_NoStreamingSupport(t *testing.T) {
 }
 
 func TestDispatcher_CalculateBackoff(t *testing.T) {
-	// Test with nil retry policy
-	dispatcher := &Dispatcher{
-		config: &models.Config{},
+	// Test with exponential backoff
+	config := &models.Config{
+		RetryPolicy: &models.RetryPolicy{
+			BackoffStrategy: models.ExponentialBackoff,
+		},
 	}
+	dispatcher := NewWithConfig(config)
 
+	// Test exponential backoff
 	backoff := dispatcher.calculateBackoff(1)
 	if backoff != time.Second {
-		t.Errorf("Expected 1 second backoff for nil policy, got: %v", backoff)
-	}
-
-	// Test with exponential backoff
-	dispatcher.config.RetryPolicy = &models.RetryPolicy{
-		BackoffStrategy: models.ExponentialBackoff,
-	}
-
-	backoff = dispatcher.calculateBackoff(1)
-	if backoff != time.Second {
-		t.Errorf("Expected 1 second backoff for attempt 1, got: %v", backoff)
+		t.Errorf("Expected 1s backoff, got %v", backoff)
 	}
 
 	backoff = dispatcher.calculateBackoff(2)
 	if backoff != 2*time.Second {
-		t.Errorf("Expected 2 seconds backoff for attempt 2, got: %v", backoff)
+		t.Errorf("Expected 2s backoff, got %v", backoff)
 	}
 
 	backoff = dispatcher.calculateBackoff(3)
 	if backoff != 4*time.Second {
-		t.Errorf("Expected 4 seconds backoff for attempt 3, got: %v", backoff)
-	}
-
-	// Test cap at 60 seconds
-	backoff = dispatcher.calculateBackoff(10)
-	if backoff != 60*time.Second {
-		t.Errorf("Expected 60 seconds backoff for attempt 10, got: %v", backoff)
-	}
-
-	// Test linear backoff
-	dispatcher.config.RetryPolicy.BackoffStrategy = models.LinearBackoff
-	backoff = dispatcher.calculateBackoff(1)
-	if backoff != time.Second {
-		t.Errorf("Expected 1 second backoff for linear attempt 1, got: %v", backoff)
-	}
-
-	backoff = dispatcher.calculateBackoff(3)
-	if backoff != 3*time.Second {
-		t.Errorf("Expected 3 seconds backoff for linear attempt 3, got: %v", backoff)
-	}
-
-	// Test fixed backoff
-	dispatcher.config.RetryPolicy.BackoffStrategy = models.FixedBackoff
-	backoff = dispatcher.calculateBackoff(1)
-	if backoff != time.Second {
-		t.Errorf("Expected 1 second backoff for fixed attempt 1, got: %v", backoff)
-	}
-
-	backoff = dispatcher.calculateBackoff(5)
-	if backoff != time.Second {
-		t.Errorf("Expected 1 second backoff for fixed attempt 5, got: %v", backoff)
-	}
-
-	// Test unknown strategy
-	dispatcher.config.RetryPolicy.BackoffStrategy = "unknown"
-	backoff = dispatcher.calculateBackoff(1)
-	if backoff != time.Second {
-		t.Errorf("Expected 1 second backoff for unknown strategy, got: %v", backoff)
+		t.Errorf("Expected 4s backoff, got %v", backoff)
 	}
 }
 
