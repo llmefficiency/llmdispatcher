@@ -30,7 +30,7 @@ func NewWithConfig(config *Config) *Dispatcher {
 		internalConfig.Timeout = config.Timeout
 		internalConfig.EnableLogging = config.EnableLogging
 		internalConfig.EnableMetrics = config.EnableMetrics
-		
+
 		// Copy advanced routing options
 		if config.CostOptimization != nil {
 			internalConfig.CostOptimization = &models.CostOptimization{
@@ -40,7 +40,7 @@ func NewWithConfig(config *Config) *Dispatcher {
 				VendorCosts: config.CostOptimization.VendorCosts,
 			}
 		}
-		
+
 		if config.LatencyOptimization != nil {
 			internalConfig.LatencyOptimization = &models.LatencyOptimization{
 				Enabled:        config.LatencyOptimization.Enabled,
