@@ -31,13 +31,7 @@ help:
 
 # Run tests with .env file loading
 test:
-	@echo "🧪 Running tests with .env file loading..."
-	@if [ -f .env ]; then \
-		export $$(cat .env | xargs) && go test -v -race -cover ./...; \
-	else \
-		echo "⚠️  No .env file found. Running tests without environment variables..."; \
-		go test -v -race -cover ./...; \
-	fi
+	@./scripts/test.sh
 
 # Run tests with HTML coverage report
 test-html: test

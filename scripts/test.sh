@@ -42,8 +42,11 @@ load_env_file() {
         while IFS= read -r line; do
             # Skip empty lines and comments
             if [[ -n "$line" && ! "$line" =~ ^[[:space:]]*# ]]; then
-                # Export the variable
-                export "$line"
+                # Only export if line contains an equals sign (key=value format)
+                if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
+                    # Export the variable
+                    export "$line"
+                fi
             fi
         done < .env
         
