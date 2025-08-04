@@ -162,4 +162,6 @@ check: fmt lint test
 # Pre-commit checks
 pre-commit:
 	@echo "🔍 Running pre-commit checks..."
-	@./scripts/pre-commit.sh 
+	@./scripts/pre-commit.sh
+
+ 
