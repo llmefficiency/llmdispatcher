@@ -5,6 +5,7 @@ import (
 )
 
 // Config holds the main dispatcher configuration
+// This is identical to pkg/llmdispatcher/types.go Config to avoid import cycles
 type Config struct {
 	DefaultVendor  string        `json:"default_vendor"`
 	FallbackVendor string        `json:"fallback_vendor,omitempty"`

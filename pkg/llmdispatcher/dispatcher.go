@@ -30,6 +30,25 @@ func NewWithConfig(config *Config) *Dispatcher {
 		internalConfig.Timeout = config.Timeout
 		internalConfig.EnableLogging = config.EnableLogging
 		internalConfig.EnableMetrics = config.EnableMetrics
+		
+		// Copy advanced routing options
+		if config.CostOptimization != nil {
+			internalConfig.CostOptimization = &models.CostOptimization{
+				Enabled:     config.CostOptimization.Enabled,
+				MaxCost:     config.CostOptimization.MaxCost,
+				PreferCheap: config.CostOptimization.PreferCheap,
+				VendorCosts: config.CostOptimization.VendorCosts,
+			}
+		}
+		
+		if config.LatencyOptimization != nil {
+			internalConfig.LatencyOptimization = &models.LatencyOptimization{
+				Enabled:        config.LatencyOptimization.Enabled,
+				MaxLatency:     config.LatencyOptimization.MaxLatency,
+				PreferFast:     config.LatencyOptimization.PreferFast,
+				LatencyWeights: config.LatencyOptimization.LatencyWeights,
+			}
+		}
 	}
 
 	if config != nil && config.RetryPolicy != nil {

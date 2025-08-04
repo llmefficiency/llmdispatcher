@@ -115,6 +115,26 @@ type Config struct {
 	Timeout        time.Duration `json:"timeout,omitempty"`
 	EnableLogging  bool          `json:"enable_logging"`
 	EnableMetrics  bool          `json:"enable_metrics"`
+	// Advanced routing options
+	CostOptimization    *CostOptimization    `json:"cost_optimization,omitempty"`
+	LatencyOptimization *LatencyOptimization `json:"latency_optimization,omitempty"`
+}
+
+// CostOptimization defines cost-based routing configuration
+type CostOptimization struct {
+	Enabled     bool    `json:"enabled"`
+	MaxCost     float64 `json:"max_cost_per_request"`
+	PreferCheap bool    `json:"prefer_cheap"`
+	// Cost per 1K tokens for each vendor
+	VendorCosts map[string]float64 `json:"vendor_costs"`
+}
+
+// LatencyOptimization defines latency-based routing configuration
+type LatencyOptimization struct {
+	Enabled        bool               `json:"enabled"`
+	MaxLatency     time.Duration      `json:"max_latency"`
+	PreferFast     bool               `json:"prefer_fast"`
+	LatencyWeights map[string]float64 `json:"latency_weights"`
 }
 
 // RetryPolicy defines how retries should be handled
