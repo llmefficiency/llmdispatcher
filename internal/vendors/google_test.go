@@ -422,3 +422,220 @@ func TestGoogle_SendStreamingRequest_InvalidJSON(t *testing.T) {
 func TestGoogle_SendStreamingRequest_WithHeaders(t *testing.T) {
 	t.Skip("Skipping streaming test due to race conditions")
 }
+
+func TestGoogle_SendRequest_Success(t *testing.T) {
+	// Create a test server that returns a valid Google response
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify the request method and path
+		if r.Method != "POST" {
+			t.Errorf("Expected POST request, got %s", r.Method)
+		}
+		if !strings.Contains(r.URL.Path, "/v1beta/models") {
+			t.Errorf("Expected path to contain /v1beta/models, got %s", r.URL.Path)
+		}
+
+		// Verify URL contains API key
+		if !strings.Contains(r.URL.String(), "key=test-key") {
+			t.Errorf("Expected URL to contain 'key=test-key', got %s", r.URL.String())
+		}
+
+		// Return a valid Google response
+		response := `{
+			"candidates": [
+				{
+					"content": {
+						"parts": [
+							{
+								"text": "Hello! How can I help you today?"
+							}
+						]
+					},
+					"finishReason": "STOP"
+				}
+			],
+			"usageMetadata": {
+				"promptTokenCount": 10,
+				"candidatesTokenCount": 15,
+				"totalTokenCount": 25
+			}
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	// Create vendor with test server URL
+	vendor := NewGoogle(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	// Create a test request
+	request := &models.Request{
+		Model: "gemini-1.5-pro",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+		MaxTokens: 100,
+	}
+
+	// Send the request
+	response, err := vendor.SendRequest(context.Background(), request)
+
+	// Verify the response
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if response == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if response.Content != "Hello! How can I help you today?" {
+		t.Errorf("Expected content 'Hello! How can I help you today?', got %s", response.Content)
+	}
+	if response.Usage.PromptTokens != 10 {
+		t.Errorf("Expected prompt tokens 10, got %d", response.Usage.PromptTokens)
+	}
+	if response.Usage.CompletionTokens != 15 {
+		t.Errorf("Expected completion tokens 15, got %d", response.Usage.CompletionTokens)
+	}
+}
+
+func TestGoogle_SendRequest_HTTPError(t *testing.T) {
+	// Create a test server that returns an error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": {"message": "Invalid request"}}`))
+	}))
+	defer server.Close()
+
+	vendor := NewGoogle(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "gemini-1.5-pro",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	_, err := vendor.SendRequest(context.Background(), request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "400") {
+		t.Errorf("Expected error to contain '400', got %s", err.Error())
+	}
+}
+
+func TestGoogle_SendRequest_NetworkError(t *testing.T) {
+	// Create vendor with invalid URL
+	vendor := NewGoogle(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: "http://invalid-url-that-does-not-exist.com",
+		Timeout: 1 * time.Second, // Short timeout for faster test
+	})
+
+	request := &models.Request{
+		Model: "gemini-1.5-pro",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	_, err := vendor.SendRequest(context.Background(), request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestGoogle_SendRequest_InvalidJSON(t *testing.T) {
+	// Create a test server that returns invalid JSON
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"invalid": json`)) // Invalid JSON
+	}))
+	defer server.Close()
+
+	vendor := NewGoogle(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "gemini-1.5-pro",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	_, err := vendor.SendRequest(context.Background(), request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestGoogle_SendRequest_NoCandidates(t *testing.T) {
+	// Create a test server that returns response without candidates
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := `{
+			"candidates": [],
+			"usageMetadata": {
+				"promptTokenCount": 10,
+				"candidatesTokenCount": 0,
+				"totalTokenCount": 10
+			}
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	vendor := NewGoogle(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "gemini-1.5-pro",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	response, err := vendor.SendRequest(context.Background(), request)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if response == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if response.Content != "" {
+		t.Errorf("Expected empty content, got %s", response.Content)
+	}
+}

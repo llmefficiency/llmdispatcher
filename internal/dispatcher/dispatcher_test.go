@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,11 +12,13 @@ import (
 
 // MockVendor is a mock implementation of LLMVendor for testing
 type MockVendor struct {
-	name         string
-	shouldFail   bool
-	response     *models.Response
-	capabilities models.Capabilities
-	available    bool
+	name              string
+	shouldFail        bool
+	response          *models.Response
+	capabilities      models.Capabilities
+	available         bool
+	supportsStreaming bool
+	streamingResponse *models.StreamingResponse
 }
 
 func (m *MockVendor) Name() string {
@@ -30,7 +33,9 @@ func (m *MockVendor) SendRequest(ctx context.Context, req *models.Request) (*mod
 }
 
 func (m *MockVendor) GetCapabilities() models.Capabilities {
-	return m.capabilities
+	capabilities := m.capabilities
+	capabilities.SupportsStreaming = m.supportsStreaming
+	return capabilities
 }
 
 func (m *MockVendor) IsAvailable(ctx context.Context) bool {
@@ -41,6 +46,14 @@ func (m *MockVendor) IsAvailable(ctx context.Context) bool {
 func (m *MockVendor) SendStreamingRequest(ctx context.Context, req *models.Request) (*models.StreamingResponse, error) {
 	if m.shouldFail {
 		return nil, errors.New("mock streaming error")
+	}
+
+	if !m.supportsStreaming {
+		return nil, errors.New("vendor does not support streaming")
+	}
+
+	if m.streamingResponse != nil {
+		return m.streamingResponse, nil
 	}
 
 	streamingResp := models.NewStreamingResponse(req.Model, m.name)
@@ -1007,9 +1020,10 @@ func TestDispatcher_SendStreaming(t *testing.T) {
 
 	// Register a mock vendor that supports streaming
 	mockVendor := &MockVendor{
-		name:       "test-streaming",
-		available:  true,
-		shouldFail: false,
+		name:              "test-streaming",
+		available:         true,
+		shouldFail:        false,
+		supportsStreaming: true,
 		capabilities: models.Capabilities{
 			Models:            []string{"test-model"},
 			SupportsStreaming: true,
@@ -1181,5 +1195,252 @@ func TestDispatcher_SendStreaming_NilContext(t *testing.T) {
 
 	if err == nil {
 		t.Error("Expected error for nil context")
+	}
+}
+
+func TestDispatcher_SendToVendor_Success(t *testing.T) {
+	dispatcher := New()
+
+	// Create a mock vendor
+	mockVendor := &MockVendor{
+		name:      "test-vendor",
+		available: true,
+		response: &models.Response{
+			Content: "Test response",
+			Model:   "test-model",
+			Vendor:  "test-vendor",
+		},
+	}
+
+	dispatcher.RegisterVendor(mockVendor)
+
+	request := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	response, err := dispatcher.SendToVendor(context.Background(), "test-vendor", request)
+
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if response == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if response.Content != "Test response" {
+		t.Errorf("Expected content 'Test response', got %s", response.Content)
+	}
+}
+
+func TestDispatcher_SendToVendor_NilContext(t *testing.T) {
+	dispatcher := New()
+
+	request := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	_, err := dispatcher.SendToVendor(context.TODO(), "test-vendor", request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestDispatcher_SendToVendor_NilRequest(t *testing.T) {
+	dispatcher := New()
+
+	_, err := dispatcher.SendToVendor(context.Background(), "test-vendor", nil)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestDispatcher_SendToVendor_VendorNotFound(t *testing.T) {
+	dispatcher := New()
+
+	request := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	_, err := dispatcher.SendToVendor(context.Background(), "nonexistent-vendor", request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected error to contain 'not found', got %s", err.Error())
+	}
+}
+
+func TestDispatcher_SendToVendor_VendorNotAvailable(t *testing.T) {
+	dispatcher := New()
+
+	// Create a mock vendor that's not available
+	mockVendor := &MockVendor{
+		name:      "test-vendor",
+		available: false,
+	}
+
+	dispatcher.RegisterVendor(mockVendor)
+
+	request := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	_, err := dispatcher.SendToVendor(context.Background(), "test-vendor", request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not available") {
+		t.Errorf("Expected error to contain 'not available', got %s", err.Error())
+	}
+}
+
+func TestDispatcher_SendStreamingToVendor_Success(t *testing.T) {
+	dispatcher := New()
+
+	// Create a mock vendor with streaming support
+	mockVendor := &MockVendor{
+		name:              "test-vendor",
+		available:         true,
+		supportsStreaming: true,
+		streamingResponse: &models.StreamingResponse{
+			ContentChan: make(chan string, 1),
+			DoneChan:    make(chan bool, 1),
+			ErrorChan:   make(chan error, 1),
+			Model:       "test-model",
+			Vendor:      "test-vendor",
+		},
+	}
+
+	dispatcher.RegisterVendor(mockVendor)
+
+	request := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	response, err := dispatcher.SendStreamingToVendor(context.Background(), "test-vendor", request)
+
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if response == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if response.Model != "test-model" {
+		t.Errorf("Expected model 'test-model', got %s", response.Model)
+	}
+}
+
+func TestDispatcher_SendStreamingToVendor_NilContext(t *testing.T) {
+	dispatcher := New()
+
+	request := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	_, err := dispatcher.SendStreamingToVendor(context.TODO(), "test-vendor", request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestDispatcher_SendStreamingToVendor_NilRequest(t *testing.T) {
+	dispatcher := New()
+
+	_, err := dispatcher.SendStreamingToVendor(context.Background(), "test-vendor", nil)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestDispatcher_SendStreamingToVendor_VendorNotFound(t *testing.T) {
+	dispatcher := New()
+
+	request := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	_, err := dispatcher.SendStreamingToVendor(context.Background(), "nonexistent-vendor", request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected error to contain 'not found', got %s", err.Error())
+	}
+}
+
+func TestDispatcher_SendStreamingToVendor_VendorNotAvailable(t *testing.T) {
+	dispatcher := New()
+
+	// Create a mock vendor that's not available
+	mockVendor := &MockVendor{
+		name:      "test-vendor",
+		available: false,
+	}
+
+	dispatcher.RegisterVendor(mockVendor)
+
+	request := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	_, err := dispatcher.SendStreamingToVendor(context.Background(), "test-vendor", request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not available") {
+		t.Errorf("Expected error to contain 'not available', got %s", err.Error())
+	}
+}
+
+func TestDispatcher_SendStreamingToVendor_NoStreamingSupport(t *testing.T) {
+	dispatcher := New()
+
+	// Create a mock vendor without streaming support
+	mockVendor := &MockVendor{
+		name:              "test-vendor",
+		available:         true,
+		supportsStreaming: false,
+	}
+
+	dispatcher.RegisterVendor(mockVendor)
+
+	request := &models.Request{
+		Model: "test-model",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	_, err := dispatcher.SendStreamingToVendor(context.Background(), "test-vendor", request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "does not support streaming") {
+		t.Errorf("Expected error to contain 'does not support streaming', got %s", err.Error())
 	}
 }

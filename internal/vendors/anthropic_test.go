@@ -262,3 +262,281 @@ func TestAnthropic_SendStreamingRequest_InvalidJSON(t *testing.T) {
 func TestAnthropic_SendStreamingRequest_WithHeaders(t *testing.T) {
 	t.Skip("Skipping streaming test due to race conditions")
 }
+
+func TestAnthropic_SendRequest_Success(t *testing.T) {
+	// Create a test server that returns a valid Anthropic response
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify the request method and path
+		if r.Method != "POST" {
+			t.Errorf("Expected POST request, got %s", r.Method)
+		}
+		if !strings.Contains(r.URL.Path, "/v1/messages") {
+			t.Errorf("Expected path to contain /v1/messages, got %s", r.URL.Path)
+		}
+
+		// Verify headers
+		if r.Header.Get("x-api-key") != "test-key" {
+			t.Errorf("Expected x-api-key header 'test-key', got %s", r.Header.Get("x-api-key"))
+		}
+		if r.Header.Get("anthropic-version") != "2023-06-01" {
+			t.Errorf("Expected anthropic-version header '2023-06-01', got %s", r.Header.Get("anthropic-version"))
+		}
+
+		// Return a valid Anthropic response
+		response := `{
+			"id": "msg_test123",
+			"type": "message",
+			"role": "assistant",
+			"content": [
+				{
+					"type": "text",
+					"text": "Hello! How can I help you today?"
+				}
+			],
+			"model": "claude-3-5-sonnet-20241022",
+			"stop_reason": "end_turn",
+			"stop_sequence": null,
+			"usage": {
+				"input_tokens": 10,
+				"output_tokens": 15
+			}
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	// Create vendor with test server URL
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	// Create a test request
+	request := &models.Request{
+		Model: "claude-3-5-sonnet-20241022",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+		MaxTokens: 100,
+	}
+
+	// Send the request
+	response, err := vendor.SendRequest(context.Background(), request)
+
+	// Verify the response
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if response == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if response.Content != "Hello! How can I help you today?" {
+		t.Errorf("Expected content 'Hello! How can I help you today?', got %s", response.Content)
+	}
+	if response.Usage.PromptTokens != 10 {
+		t.Errorf("Expected prompt tokens 10, got %d", response.Usage.PromptTokens)
+	}
+	if response.Usage.CompletionTokens != 15 {
+		t.Errorf("Expected completion tokens 15, got %d", response.Usage.CompletionTokens)
+	}
+}
+
+func TestAnthropic_SendRequest_HTTPError(t *testing.T) {
+	// Create a test server that returns an error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": {"type": "invalid_request_error", "message": "Invalid request"}}`))
+	}))
+	defer server.Close()
+
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "claude-3-5-sonnet-20241022",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	_, err := vendor.SendRequest(context.Background(), request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "400") {
+		t.Errorf("Expected error to contain '400', got %s", err.Error())
+	}
+}
+
+func TestAnthropic_SendRequest_NetworkError(t *testing.T) {
+	// Create vendor with invalid URL
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: "http://invalid-url-that-does-not-exist.com",
+		Timeout: 1 * time.Second, // Short timeout for faster test
+	})
+
+	request := &models.Request{
+		Model: "claude-3-5-sonnet-20241022",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	_, err := vendor.SendRequest(context.Background(), request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestAnthropic_SendRequest_InvalidJSON(t *testing.T) {
+	// Create a test server that returns invalid JSON
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"invalid": json`)) // Invalid JSON
+	}))
+	defer server.Close()
+
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "claude-3-5-sonnet-20241022",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	_, err := vendor.SendRequest(context.Background(), request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestAnthropic_SendRequest_NoChoices(t *testing.T) {
+	// Create a test server that returns response without choices
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := `{
+			"id": "msg_test123",
+			"type": "message",
+			"role": "assistant",
+			"content": [],
+			"model": "claude-3-5-sonnet-20241022",
+			"stop_reason": "end_turn",
+			"usage": {
+				"input_tokens": 10,
+				"output_tokens": 0
+			}
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "claude-3-5-sonnet-20241022",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	response, err := vendor.SendRequest(context.Background(), request)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if response == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if response.Content != "" {
+		t.Errorf("Expected empty content, got %s", response.Content)
+	}
+}
+
+func TestAnthropic_SendRequest_WithHeaders(t *testing.T) {
+	// Create a test server that returns a valid response
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := `{
+			"id": "msg_test123",
+			"type": "message",
+			"role": "assistant",
+			"content": [
+				{
+					"type": "text",
+					"text": "Response with custom headers"
+				}
+			],
+			"model": "claude-3-5-sonnet-20241022",
+			"stop_reason": "end_turn",
+			"usage": {
+				"input_tokens": 10,
+				"output_tokens": 15
+			}
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "claude-3-5-sonnet-20241022",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	response, err := vendor.SendRequest(context.Background(), request)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if response == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if response.Content == "" {
+		t.Error("Expected content in response")
+	}
+}

@@ -464,3 +464,226 @@ func TestAzureOpenAI_SendStreamingRequest_InvalidJSON(t *testing.T) {
 func TestAzureOpenAI_SendStreamingRequest_WithHeaders(t *testing.T) {
 	t.Skip("Skipping streaming test due to race conditions")
 }
+
+func TestAzureOpenAI_SendRequest_Success(t *testing.T) {
+	// Create a test server that returns a valid Azure OpenAI response
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify the request method and path
+		if r.Method != "POST" {
+			t.Errorf("Expected POST request, got %s", r.Method)
+		}
+		if !strings.Contains(r.URL.Path, "/openai/deployments") {
+			t.Errorf("Expected path to contain /openai/deployments, got %s", r.URL.Path)
+		}
+
+		// Verify headers
+		if r.Header.Get("api-key") != "test-key" {
+			t.Errorf("Expected api-key header 'test-key', got %s", r.Header.Get("api-key"))
+		}
+
+		// Return a valid Azure OpenAI response
+		response := `{
+			"id": "chatcmpl-test123",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "gpt-4",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": "Hello! How can I help you today?"
+					},
+					"finish_reason": "stop"
+				}
+			],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 15,
+				"total_tokens": 25
+			}
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	// Create vendor with test server URL
+	vendor := NewAzureOpenAI(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	// Create a test request
+	request := &models.Request{
+		Model: "gpt-4",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+		MaxTokens: 100,
+	}
+
+	// Send the request
+	response, err := vendor.SendRequest(context.Background(), request)
+
+	// Verify the response
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if response == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if response.Content != "Hello! How can I help you today?" {
+		t.Errorf("Expected content 'Hello! How can I help you today?', got %s", response.Content)
+	}
+	if response.Usage.PromptTokens != 10 {
+		t.Errorf("Expected prompt tokens 10, got %d", response.Usage.PromptTokens)
+	}
+	if response.Usage.CompletionTokens != 15 {
+		t.Errorf("Expected completion tokens 15, got %d", response.Usage.CompletionTokens)
+	}
+}
+
+func TestAzureOpenAI_SendRequest_HTTPError(t *testing.T) {
+	// Create a test server that returns an error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": {"message": "Invalid request"}}`))
+	}))
+	defer server.Close()
+
+	vendor := NewAzureOpenAI(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "gpt-4",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	_, err := vendor.SendRequest(context.Background(), request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "400") {
+		t.Errorf("Expected error to contain '400', got %s", err.Error())
+	}
+}
+
+func TestAzureOpenAI_SendRequest_NetworkError(t *testing.T) {
+	// Create vendor with invalid URL
+	vendor := NewAzureOpenAI(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: "http://invalid-url-that-does-not-exist.com",
+		Timeout: 1 * time.Second, // Short timeout for faster test
+	})
+
+	request := &models.Request{
+		Model: "gpt-4",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	_, err := vendor.SendRequest(context.Background(), request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestAzureOpenAI_SendRequest_InvalidJSON(t *testing.T) {
+	// Create a test server that returns invalid JSON
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"invalid": json`)) // Invalid JSON
+	}))
+	defer server.Close()
+
+	vendor := NewAzureOpenAI(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "gpt-4",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	_, err := vendor.SendRequest(context.Background(), request)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestAzureOpenAI_SendRequest_NoChoices(t *testing.T) {
+	// Create a test server that returns response without choices
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := `{
+			"id": "chatcmpl-test123",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "gpt-4",
+			"choices": [],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 0,
+				"total_tokens": 10
+			}
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	vendor := NewAzureOpenAI(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Timeout: 30 * time.Second,
+	})
+
+	request := &models.Request{
+		Model: "gpt-4",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello",
+			},
+		},
+	}
+
+	response, err := vendor.SendRequest(context.Background(), request)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if response == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if response.Content != "" {
+		t.Errorf("Expected empty content, got %s", response.Content)
+	}
+}
