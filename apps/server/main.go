@@ -272,7 +272,7 @@ func (ws *WebService) setupRoutes() *mux.Router {
 	api.HandleFunc("/models", ws.modelsHandler).Methods("GET")
 
 	// Serve static files
-	fs := http.FileServer(http.Dir("cmd/webservice/static"))
+	fs := http.FileServer(http.Dir("apps/server/static"))
 	router.PathPrefix("/").Handler(fs)
 
 	// CORS middleware
@@ -314,8 +314,8 @@ func (ws *WebService) healthHandler(w http.ResponseWriter, r *http.Request) {
 	azureKey := os.Getenv("AZURE_OPENAI_API_KEY")
 
 	// Check if keys are valid (not placeholder values)
-	openaiEnabled := openaiKey != "" && !strings.Contains(openaiKey, "your-") && strings.HasPrefix(openaiKey, "sk-")
-	anthropicEnabled := anthropicKey != "" && !strings.Contains(anthropicKey, "your-") && strings.HasPrefix(anthropicKey, "sk-ant-")
+	openaiEnabled := openaiKey != "" && !strings.Contains(openaiKey, "your-") && (strings.HasPrefix(openaiKey, "sk-") || strings.HasPrefix(openaiKey, "sk-proj-"))
+	anthropicEnabled := anthropicKey != "" && !strings.Contains(anthropicKey, "your-") && (strings.HasPrefix(anthropicKey, "sk-ant-") || strings.HasPrefix(anthropicKey, "sk-ant-api"))
 	googleEnabled := googleKey != "" && !strings.Contains(googleKey, "your-") && !strings.Contains(googleKey, "here")
 	azureEnabled := azureKey != "" && !strings.Contains(azureKey, "your-") && !strings.Contains(azureKey, "here")
 	localEnabled := true // Local is always available
@@ -652,8 +652,8 @@ func (ws *WebService) vendorsHandler(w http.ResponseWriter, r *http.Request) {
 	azureKey := os.Getenv("AZURE_OPENAI_API_KEY")
 
 	// Check if keys are valid (not placeholder values)
-	openaiEnabled := openaiKey != "" && !strings.Contains(openaiKey, "your-") && strings.HasPrefix(openaiKey, "sk-")
-	anthropicEnabled := anthropicKey != "" && !strings.Contains(anthropicKey, "your-") && strings.HasPrefix(anthropicKey, "sk-ant-")
+	openaiEnabled := openaiKey != "" && !strings.Contains(openaiKey, "your-") && (strings.HasPrefix(openaiKey, "sk-") || strings.HasPrefix(openaiKey, "sk-proj-"))
+	anthropicEnabled := anthropicKey != "" && !strings.Contains(anthropicKey, "your-") && (strings.HasPrefix(anthropicKey, "sk-ant-") || strings.HasPrefix(anthropicKey, "sk-ant-api"))
 	googleEnabled := googleKey != "" && !strings.Contains(googleKey, "your-") && !strings.Contains(googleKey, "here")
 	azureEnabled := azureKey != "" && !strings.Contains(azureKey, "your-") && !strings.Contains(azureKey, "here")
 	localEnabled := true // Local is always available
