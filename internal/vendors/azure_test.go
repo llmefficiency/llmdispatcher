@@ -687,3 +687,164 @@ func TestAzureOpenAI_SendRequest_NoChoices(t *testing.T) {
 		t.Errorf("Expected empty content, got %s", response.Content)
 	}
 }
+
+func TestAzureOpenAI_SendRequest_InvalidRequest(t *testing.T) {
+	vendor := &AzureOpenAIVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: "https://api.openai.azure.com",
+		},
+		client: &http.Client{},
+	}
+
+	// Test with invalid request (empty model)
+	req := &models.Request{
+		Model: "",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for invalid request, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for invalid request")
+	}
+}
+
+func TestAzureOpenAI_SendRequest_ResponseBodyReadError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set headers but don't write body, then close connection
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Close the connection immediately to cause read error
+		hj, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, _ := hj.Hijack()
+			conn.Close()
+		}
+	}))
+	defer server.Close()
+
+	vendor := &AzureOpenAIVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: server.URL,
+		},
+		client: &http.Client{},
+	}
+
+	req := &models.Request{
+		Model: "gpt-4",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for response body read failure, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for read error")
+	}
+}
+
+func TestAzureOpenAI_SendRequest_InvalidJSONResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("invalid json"))
+	}))
+	defer server.Close()
+
+	vendor := &AzureOpenAIVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: server.URL,
+		},
+		client: &http.Client{},
+	}
+
+	req := &models.Request{
+		Model: "gpt-4",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for invalid JSON response, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for JSON parse error")
+	}
+}
+
+func TestAzureOpenAI_SendRequest_WithCustomHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify custom headers are set
+		if r.Header.Get("custom-header") != "custom-value" {
+			t.Errorf("Expected custom-header, got: %s", r.Header.Get("custom-header"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"id": "chatcmpl-test123",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "gpt-4",
+			"choices": [{
+				"index": 0,
+				"message": {
+					"role": "assistant",
+					"content": "Hello! How can I help you today?"
+				}
+			}],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 15,
+				"total_tokens": 25
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	vendor := &AzureOpenAIVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: server.URL,
+			Headers: map[string]string{
+				"custom-header": "custom-value",
+			},
+		},
+		client: &http.Client{},
+	}
+
+	req := &models.Request{
+		Model: "gpt-4",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err != nil {
+		t.Errorf("Expected success, got error: %v", err)
+		return
+	}
+	if resp == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if resp.Content != "Hello! How can I help you today?" {
+		t.Errorf("Expected 'Hello! How can I help you today?', got: %s", resp.Content)
+	}
+}

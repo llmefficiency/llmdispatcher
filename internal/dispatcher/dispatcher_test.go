@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1442,5 +1443,174 @@ func TestDispatcher_SendStreamingToVendor_NoStreamingSupport(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "does not support streaming") {
 		t.Errorf("Expected error to contain 'does not support streaming', got %s", err.Error())
+	}
+}
+
+func TestDispatcher_CalculateBackoff(t *testing.T) {
+	// Test with nil retry policy
+	dispatcher := &Dispatcher{
+		config: &models.Config{},
+	}
+
+	backoff := dispatcher.calculateBackoff(1)
+	if backoff != time.Second {
+		t.Errorf("Expected 1 second backoff for nil policy, got: %v", backoff)
+	}
+
+	// Test with exponential backoff
+	dispatcher.config.RetryPolicy = &models.RetryPolicy{
+		BackoffStrategy: models.ExponentialBackoff,
+	}
+
+	backoff = dispatcher.calculateBackoff(1)
+	if backoff != time.Second {
+		t.Errorf("Expected 1 second backoff for attempt 1, got: %v", backoff)
+	}
+
+	backoff = dispatcher.calculateBackoff(2)
+	if backoff != 2*time.Second {
+		t.Errorf("Expected 2 seconds backoff for attempt 2, got: %v", backoff)
+	}
+
+	backoff = dispatcher.calculateBackoff(3)
+	if backoff != 4*time.Second {
+		t.Errorf("Expected 4 seconds backoff for attempt 3, got: %v", backoff)
+	}
+
+	// Test cap at 60 seconds
+	backoff = dispatcher.calculateBackoff(10)
+	if backoff != 60*time.Second {
+		t.Errorf("Expected 60 seconds backoff for attempt 10, got: %v", backoff)
+	}
+
+	// Test linear backoff
+	dispatcher.config.RetryPolicy.BackoffStrategy = models.LinearBackoff
+	backoff = dispatcher.calculateBackoff(1)
+	if backoff != time.Second {
+		t.Errorf("Expected 1 second backoff for linear attempt 1, got: %v", backoff)
+	}
+
+	backoff = dispatcher.calculateBackoff(3)
+	if backoff != 3*time.Second {
+		t.Errorf("Expected 3 seconds backoff for linear attempt 3, got: %v", backoff)
+	}
+
+	// Test fixed backoff
+	dispatcher.config.RetryPolicy.BackoffStrategy = models.FixedBackoff
+	backoff = dispatcher.calculateBackoff(1)
+	if backoff != time.Second {
+		t.Errorf("Expected 1 second backoff for fixed attempt 1, got: %v", backoff)
+	}
+
+	backoff = dispatcher.calculateBackoff(5)
+	if backoff != time.Second {
+		t.Errorf("Expected 1 second backoff for fixed attempt 5, got: %v", backoff)
+	}
+
+	// Test unknown strategy
+	dispatcher.config.RetryPolicy.BackoffStrategy = "unknown"
+	backoff = dispatcher.calculateBackoff(1)
+	if backoff != time.Second {
+		t.Errorf("Expected 1 second backoff for unknown strategy, got: %v", backoff)
+	}
+}
+
+func TestDispatcher_ShouldRetry(t *testing.T) {
+	dispatcher := &Dispatcher{
+		config: &models.Config{
+			RetryPolicy: &models.RetryPolicy{
+				MaxRetries: 3,
+			},
+		},
+	}
+
+	// Test retryable errors
+	retryableErrors := []error{
+		fmt.Errorf("rate limit exceeded"),
+		fmt.Errorf("timeout"),
+		fmt.Errorf("connection refused"),
+		fmt.Errorf("network error"),
+	}
+
+	for _, err := range retryableErrors {
+		if !dispatcher.shouldRetry(err) {
+			t.Errorf("Expected %v to be retryable", err)
+		}
+	}
+
+	// Test non-retryable errors
+	nonRetryableErrors := []error{
+		fmt.Errorf("invalid request"),
+		fmt.Errorf("authentication failed"),
+		fmt.Errorf("permission denied"),
+	}
+
+	for _, err := range nonRetryableErrors {
+		if dispatcher.shouldRetry(err) {
+			t.Errorf("Expected %v to not be retryable", err)
+		}
+	}
+}
+
+func TestDispatcher_UpdateStats(t *testing.T) {
+	dispatcher := &Dispatcher{
+		stats: &models.DispatcherStats{
+			VendorStats: make(map[string]models.VendorStats),
+		},
+	}
+
+	// Test successful request
+	dispatcher.updateStats(true, "test-vendor", 100*time.Millisecond)
+
+	if dispatcher.stats.SuccessfulRequests != 1 {
+		t.Errorf("Expected 1 successful request, got: %d", dispatcher.stats.SuccessfulRequests)
+	}
+
+	if dispatcher.stats.AverageLatency != 100*time.Millisecond {
+		t.Errorf("Expected 100ms average latency, got: %v", dispatcher.stats.AverageLatency)
+	}
+
+	// Test failed request
+	dispatcher.updateStats(false, "test-vendor", 200*time.Millisecond)
+
+	if dispatcher.stats.FailedRequests != 1 {
+		t.Errorf("Expected 1 failed request, got: %d", dispatcher.stats.FailedRequests)
+	}
+
+	// Average should be (100 + 200) / 2 = 150ms
+	expectedAvg := 150 * time.Millisecond
+	if dispatcher.stats.AverageLatency != expectedAvg {
+		t.Errorf("Expected 150ms average latency, got: %v", dispatcher.stats.AverageLatency)
+	}
+
+	// Test vendor-specific stats
+	vendorStats := dispatcher.stats.VendorStats["test-vendor"]
+	if vendorStats.Requests != 2 {
+		t.Errorf("Expected 2 vendor requests, got: %d", vendorStats.Requests)
+	}
+	if vendorStats.Successes != 1 {
+		t.Errorf("Expected 1 vendor success, got: %d", vendorStats.Successes)
+	}
+	if vendorStats.Failures != 1 {
+		t.Errorf("Expected 1 vendor failure, got: %d", vendorStats.Failures)
+	}
+}
+
+func TestDispatcher_UpdateStats_NoVendor(t *testing.T) {
+	dispatcher := &Dispatcher{
+		stats: &models.DispatcherStats{
+			VendorStats: make(map[string]models.VendorStats),
+		},
+	}
+
+	// Test without vendor name
+	dispatcher.updateStats(true, "", 100*time.Millisecond)
+
+	if dispatcher.stats.SuccessfulRequests != 1 {
+		t.Errorf("Expected 1 successful request, got: %d", dispatcher.stats.SuccessfulRequests)
+	}
+
+	if len(dispatcher.stats.VendorStats) != 0 {
+		t.Errorf("Expected no vendor stats, got: %d", len(dispatcher.stats.VendorStats))
 	}
 }

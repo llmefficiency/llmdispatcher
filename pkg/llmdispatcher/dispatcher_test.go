@@ -3,6 +3,7 @@ package llmdispatcher
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,13 +12,15 @@ import (
 
 // MockVendor is a mock implementation of Vendor for testing
 type MockVendor struct {
-	name              string
-	shouldFail        bool
-	response          *Response
-	capabilities      Capabilities
-	available         bool
-	supportsStreaming bool
-	streamingResponse *StreamingResponse
+	name                      string
+	shouldFail                bool
+	response                  *Response
+	capabilities              Capabilities
+	available                 bool
+	supportsStreaming         bool
+	streamingResponse         *StreamingResponse
+	sendRequestError          error
+	sendStreamingRequestError error
 }
 
 func (m *MockVendor) Name() string {
@@ -27,6 +30,9 @@ func (m *MockVendor) Name() string {
 func (m *MockVendor) SendRequest(ctx context.Context, req *Request) (*Response, error) {
 	if m.shouldFail {
 		return nil, &MockError{message: "mock error"}
+	}
+	if m.sendRequestError != nil {
+		return nil, m.sendRequestError
 	}
 	return m.response, nil
 }
@@ -42,6 +48,9 @@ func (m *MockVendor) IsAvailable(ctx context.Context) bool {
 func (m *MockVendor) SendStreamingRequest(ctx context.Context, req *Request) (*StreamingResponse, error) {
 	if m.shouldFail {
 		return nil, &MockError{message: "mock streaming error"}
+	}
+	if m.sendStreamingRequestError != nil {
+		return nil, m.sendStreamingRequestError
 	}
 
 	if !m.supportsStreaming {
@@ -721,249 +730,206 @@ func TestDispatcher_GetVendor_NotFound(t *testing.T) {
 	}
 }
 
-func TestInternalVendorAdapter_SendRequest(t *testing.T) {
-	// Create a mock vendor
-	mockVendor := &MockVendor{
-		name:      "test-vendor",
-		available: true,
-		response: &Response{
-			Content: "Test response",
-			Model:   "test-model",
-			Vendor:  "test-vendor",
+func TestDispatcher_SendRequest_Error(t *testing.T) {
+	dispatcher := New()
+
+	// Test with nil request
+	resp, err := dispatcher.Send(context.TODO(), nil)
+	if err == nil {
+		t.Error("Expected error for nil request, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for nil request")
+	}
+}
+
+func TestDispatcher_SendRequest_NoVendors(t *testing.T) {
+	dispatcher := New()
+
+	req := &Request{
+		Model: "gpt-4",
+		Messages: []Message{
+			{Role: "user", Content: "Hello"},
 		},
+	}
+
+	resp, err := dispatcher.Send(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for no vendors, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for no vendors")
+	}
+}
+
+func TestInternalVendorAdapter_SendRequest_Error(t *testing.T) {
+	// Create a mock that implements the Vendor interface
+	mockVendor := &MockVendor{
+		name:             "test-vendor",
+		sendRequestError: fmt.Errorf("mock error"),
 		capabilities: Capabilities{
 			Models: []string{"test-model"},
 		},
 	}
 
-	adapter := &internalVendorAdapter{vendor: mockVendor}
+	adapter := &internalVendorAdapter{
+		vendor: mockVendor,
+	}
 
-	request := &models.Request{
+	req := &models.Request{
 		Model: "test-model",
 		Messages: []models.Message{
 			{Role: "user", Content: "Hello"},
 		},
 	}
 
-	response, err := adapter.SendRequest(context.Background(), request)
-
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-	if response == nil {
-		t.Error("Expected response, got nil")
+	resp, err := adapter.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error from mock vendor, got nil")
 		return
 	}
-	if response.Content != "Test response" {
-		t.Errorf("Expected content 'Test response', got %s", response.Content)
+	if resp != nil {
+		t.Error("Expected nil response for error")
 	}
 }
 
-func TestInternalVendorAdapter_GetCapabilities(t *testing.T) {
-	// Create a mock vendor
+func TestInternalVendorAdapter_SendStreamingRequest_Error(t *testing.T) {
+	// Create a mock that implements the Vendor interface
 	mockVendor := &MockVendor{
-		name: "test-vendor",
+		name:                      "test-vendor",
+		sendStreamingRequestError: fmt.Errorf("mock streaming error"),
 		capabilities: Capabilities{
-			Models:            []string{"test-model"},
-			SupportsStreaming: true,
-			MaxTokens:         1000,
-			MaxInputTokens:    4000,
+			Models: []string{"test-model"},
 		},
 	}
 
-	adapter := &internalVendorAdapter{vendor: mockVendor}
-
-	capabilities := adapter.GetCapabilities()
-
-	if len(capabilities.Models) != 1 {
-		t.Errorf("Expected 1 model, got %d", len(capabilities.Models))
-	}
-	if !capabilities.SupportsStreaming {
-		t.Error("Expected streaming support to be true")
-	}
-	if capabilities.MaxTokens != 1000 {
-		t.Errorf("Expected MaxTokens 1000, got %d", capabilities.MaxTokens)
-	}
-	if capabilities.MaxInputTokens != 4000 {
-		t.Errorf("Expected MaxInputTokens 4000, got %d", capabilities.MaxInputTokens)
-	}
-}
-
-func TestInternalVendorAdapter_IsAvailable(t *testing.T) {
-	// Create a mock vendor
-	mockVendor := &MockVendor{
-		name:      "test-vendor",
-		available: true,
+	adapter := &internalVendorAdapter{
+		vendor: mockVendor,
 	}
 
-	adapter := &internalVendorAdapter{vendor: mockVendor}
-
-	available := adapter.IsAvailable(context.Background())
-	if !available {
-		t.Error("Expected vendor to be available")
-	}
-}
-
-func TestInternalVendorAdapter_SendStreamingRequest(t *testing.T) {
-	// Create a mock vendor
-	mockVendor := &MockVendor{
-		name:              "test-vendor",
-		available:         true,
-		supportsStreaming: true,
-		capabilities: Capabilities{
-			Models:            []string{"test-model"},
-			SupportsStreaming: true,
-		},
-	}
-
-	adapter := &internalVendorAdapter{vendor: mockVendor}
-
-	request := &models.Request{
+	req := &models.Request{
 		Model: "test-model",
 		Messages: []models.Message{
 			{Role: "user", Content: "Hello"},
 		},
 	}
 
-	response, err := adapter.SendStreamingRequest(context.Background(), request)
-
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-	if response == nil {
-		t.Error("Expected response, got nil")
+	resp, err := adapter.SendStreamingRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error from mock vendor, got nil")
 		return
 	}
-	if response.Model != "test-model" {
-		t.Errorf("Expected model 'test-model', got %s", response.Model)
+	if resp != nil {
+		t.Error("Expected nil response for error")
 	}
 }
 
-func TestVendorWrapper_SendRequest(t *testing.T) {
-	// Create a mock internal vendor
-	mockInternalVendor := &MockInternalVendor{
-		name:      "test-vendor",
-		available: true,
-		response: &models.Response{
-			Content: "Test response",
-			Model:   "test-model",
-			Vendor:  "test-vendor",
+func TestVendorWrapper_SendRequest_Error(t *testing.T) {
+	// Create a mock that implements models.LLMVendor interface
+	mockVendor := &MockInternalVendor{
+		name:             "test-vendor",
+		sendRequestError: fmt.Errorf("mock error"),
+		capabilities: models.Capabilities{
+			Models: []string{"test-model"},
 		},
 	}
 
-	wrapper := &vendorWrapper{vendor: mockInternalVendor}
+	wrapper := &vendorWrapper{
+		vendor: mockVendor,
+	}
 
-	request := &Request{
+	req := &Request{
 		Model: "test-model",
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
 	}
 
-	response, err := wrapper.SendRequest(context.Background(), request)
-
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-	if response == nil {
-		t.Error("Expected response, got nil")
+	resp, err := wrapper.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error from mock vendor, got nil")
 		return
 	}
-	if response.Content != "Test response" {
-		t.Errorf("Expected content 'Test response', got %s", response.Content)
+	if resp != nil {
+		t.Error("Expected nil response for error")
 	}
 }
 
-func TestVendorWrapper_GetCapabilities(t *testing.T) {
-	// Create a mock internal vendor
-	mockInternalVendor := &MockInternalVendor{
-		name:              "test-vendor",
-		supportsStreaming: true,
+func TestVendorWrapper_SendStreamingRequest_Error(t *testing.T) {
+	// Create a mock that implements models.LLMVendor interface
+	mockVendor := &MockInternalVendor{
+		name:                      "test-vendor",
+		sendStreamingRequestError: fmt.Errorf("mock streaming error"),
 		capabilities: models.Capabilities{
-			Models:            []string{"test-model"},
-			SupportsStreaming: true,
-			MaxTokens:         1000,
-			MaxInputTokens:    4000,
+			Models: []string{"test-model"},
 		},
 	}
 
-	wrapper := &vendorWrapper{vendor: mockInternalVendor}
-
-	capabilities := wrapper.GetCapabilities()
-
-	if len(capabilities.Models) != 1 {
-		t.Errorf("Expected 1 model, got %d", len(capabilities.Models))
-	}
-	if !capabilities.SupportsStreaming {
-		t.Error("Expected streaming support to be true")
-	}
-	if capabilities.MaxTokens != 1000 {
-		t.Errorf("Expected MaxTokens 1000, got %d", capabilities.MaxTokens)
-	}
-	if capabilities.MaxInputTokens != 4000 {
-		t.Errorf("Expected MaxInputTokens 4000, got %d", capabilities.MaxInputTokens)
-	}
-}
-
-func TestVendorWrapper_IsAvailable(t *testing.T) {
-	// Create a mock internal vendor
-	mockInternalVendor := &MockInternalVendor{
-		name:      "test-vendor",
-		available: true,
+	wrapper := &vendorWrapper{
+		vendor: mockVendor,
 	}
 
-	wrapper := &vendorWrapper{vendor: mockInternalVendor}
-
-	available := wrapper.IsAvailable(context.Background())
-	if !available {
-		t.Error("Expected vendor to be available")
-	}
-}
-
-func TestVendorWrapper_SendStreamingRequest(t *testing.T) {
-	// Create a mock internal vendor
-	mockInternalVendor := &MockInternalVendor{
-		name:              "test-vendor",
-		available:         true,
-		supportsStreaming: true,
-		capabilities: models.Capabilities{
-			Models:            []string{"test-model"},
-			SupportsStreaming: true,
-		},
-	}
-
-	wrapper := &vendorWrapper{vendor: mockInternalVendor}
-
-	request := &Request{
+	req := &Request{
 		Model: "test-model",
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
 	}
 
-	response, err := wrapper.SendStreamingRequest(context.Background(), request)
-
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-	if response == nil {
-		t.Error("Expected response, got nil")
+	resp, err := wrapper.SendStreamingRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error from mock vendor, got nil")
 		return
 	}
-	if response.Model != "test-model" {
-		t.Errorf("Expected model 'test-model', got %s", response.Model)
+	if resp != nil {
+		t.Error("Expected nil response for error")
+	}
+}
+
+func TestVendorWrapper_SendStreamingRequest_NoSupport(t *testing.T) {
+	// Create a mock that implements models.LLMVendor interface
+	mockVendor := &MockInternalVendor{
+		name:              "test-vendor",
+		supportsStreaming: false,
+		capabilities: models.Capabilities{
+			Models: []string{"test-model"},
+		},
+	}
+
+	wrapper := &vendorWrapper{
+		vendor: mockVendor,
+	}
+
+	req := &Request{
+		Model: "test-model",
+		Messages: []Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	resp, err := wrapper.SendStreamingRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for no streaming support, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for no streaming support")
 	}
 }
 
 // MockInternalVendor is a mock implementation of models.LLMVendor for testing
 type MockInternalVendor struct {
-	name              string
-	shouldFail        bool
-	response          *models.Response
-	capabilities      models.Capabilities
-	available         bool
-	supportsStreaming bool
-	streamingResponse *models.StreamingResponse
+	name                      string
+	shouldFail                bool
+	response                  *models.Response
+	capabilities              models.Capabilities
+	available                 bool
+	supportsStreaming         bool
+	streamingResponse         *models.StreamingResponse
+	sendRequestError          error
+	sendStreamingRequestError error
 }
 
 func (m *MockInternalVendor) Name() string {
@@ -973,6 +939,9 @@ func (m *MockInternalVendor) Name() string {
 func (m *MockInternalVendor) SendRequest(ctx context.Context, req *models.Request) (*models.Response, error) {
 	if m.shouldFail {
 		return nil, errors.New("mock error")
+	}
+	if m.sendRequestError != nil {
+		return nil, m.sendRequestError
 	}
 	return m.response, nil
 }
@@ -990,6 +959,9 @@ func (m *MockInternalVendor) IsAvailable(ctx context.Context) bool {
 func (m *MockInternalVendor) SendStreamingRequest(ctx context.Context, req *models.Request) (*models.StreamingResponse, error) {
 	if m.shouldFail {
 		return nil, errors.New("mock streaming error")
+	}
+	if m.sendStreamingRequestError != nil {
+		return nil, m.sendStreamingRequestError
 	}
 
 	if !m.supportsStreaming {

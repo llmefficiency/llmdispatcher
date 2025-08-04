@@ -195,7 +195,139 @@ func TestAnthropicVendor_ConvertResponse(t *testing.T) {
 }
 
 func TestAnthropic_SendStreamingRequest_Success(t *testing.T) {
-	t.Skip("Skipping streaming test due to race conditions")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+
+		// Send streaming data
+		w.Write([]byte("data: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_test123\"}}\n\n"))
+		w.Write([]byte("data: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"text\", \"text\": \"Hello\"}}\n\n"))
+		w.Write([]byte("data: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"! How can I help you today?\"}}\n\n"))
+		w.Write([]byte("data: {\"type\": \"content_block_stop\", \"index\": 0}\n\n"))
+		w.Write([]byte("data: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\", \"stop_sequence\": null}}\n\n"))
+		w.Write([]byte("data: {\"type\": \"message_stop\"}\n\n"))
+	}))
+	defer server.Close()
+
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+	})
+
+	req := &models.Request{
+		Model: "claude-3-sonnet-20240229",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	streamingResp, err := vendor.SendStreamingRequest(context.TODO(), req)
+	if err != nil {
+		t.Errorf("Expected success, got error: %v", err)
+		return
+	}
+	if streamingResp == nil {
+		t.Error("Expected streaming response, got nil")
+		return
+	}
+
+	// Read from the streaming response
+	content := ""
+	for {
+		select {
+		case chunk := <-streamingResp.ContentChan:
+			content += chunk
+		case <-streamingResp.DoneChan:
+			goto done
+		case err := <-streamingResp.ErrorChan:
+			if err != nil {
+				t.Errorf("Unexpected error from streaming: %v", err)
+			}
+			goto done
+		}
+	}
+done:
+
+	if content == "" {
+		t.Error("Expected content from streaming response")
+	}
+}
+
+func TestAnthropic_SendStreamingRequest_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+	})
+
+	req := &models.Request{
+		Model: "claude-3-sonnet-20240229",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	streamingResp, err := vendor.SendStreamingRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for HTTP error, got nil")
+		return
+	}
+	if streamingResp != nil {
+		t.Error("Expected nil streaming response for error")
+	}
+}
+
+func TestAnthropic_SendStreamingRequest_InvalidRequest(t *testing.T) {
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: "https://api.anthropic.com",
+	})
+
+	// Test with invalid request (empty model)
+	req := &models.Request{
+		Model: "",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	streamingResp, err := vendor.SendStreamingRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for invalid request, got nil")
+		return
+	}
+	if streamingResp != nil {
+		t.Error("Expected nil streaming response for invalid request")
+	}
+}
+
+func TestAnthropic_SendStreamingRequest_JSONMarshalError(t *testing.T) {
+	vendor := NewAnthropic(&models.VendorConfig{
+		APIKey:  "test-key",
+		BaseURL: "https://api.anthropic.com",
+	})
+
+	req := &models.Request{
+		Model: "claude-3-sonnet-20240229",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	// This should fail due to HTTP request creation
+	streamingResp, err := vendor.SendStreamingRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for HTTP request failure, got nil")
+		return
+	}
+	if streamingResp != nil {
+		t.Error("Expected nil streaming response for error")
+	}
 }
 
 func TestAnthropic_SendStreamingRequest_HTTPError(t *testing.T) {
@@ -538,5 +670,210 @@ func TestAnthropic_SendRequest_WithHeaders(t *testing.T) {
 	}
 	if response.Content == "" {
 		t.Error("Expected content in response")
+	}
+}
+
+func TestAnthropic_SendRequest_InvalidRequest(t *testing.T) {
+	vendor := &AnthropicVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: "https://api.anthropic.com",
+		},
+		client: &http.Client{},
+	}
+
+	// Test with invalid request (empty model)
+	req := &models.Request{
+		Model: "",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for invalid request, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for invalid request")
+	}
+}
+
+func TestAnthropic_SendRequest_JSONMarshalError(t *testing.T) {
+	// This test is difficult to trigger in practice, but we can test the structure
+	vendor := &AnthropicVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: "https://api.anthropic.com",
+		},
+		client: &http.Client{},
+	}
+
+	req := &models.Request{
+		Model: "claude-3-sonnet-20240229",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	// This should work fine since the request is valid
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error due to HTTP request failure, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for HTTP error")
+	}
+}
+
+func TestAnthropic_SendRequest_HTTPRequestCreationError(t *testing.T) {
+	vendor := &AnthropicVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: "https://api.anthropic.com",
+		},
+		client: &http.Client{},
+	}
+
+	req := &models.Request{
+		Model: "claude-3-sonnet-20240229",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	// This should fail due to HTTP request creation (invalid URL or context)
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error due to HTTP request failure, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for HTTP error")
+	}
+}
+
+func TestAnthropic_SendRequest_ResponseBodyReadError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set headers but don't write body, then close connection
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Close the connection immediately to cause read error
+		hj, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, _ := hj.Hijack()
+			conn.Close()
+		}
+	}))
+	defer server.Close()
+
+	vendor := &AnthropicVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: server.URL,
+		},
+		client: &http.Client{},
+	}
+
+	req := &models.Request{
+		Model: "claude-3-sonnet-20240229",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for response body read failure, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for read error")
+	}
+}
+
+func TestAnthropic_SendRequest_InvalidJSONResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("invalid json"))
+	}))
+	defer server.Close()
+
+	vendor := &AnthropicVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: server.URL,
+		},
+		client: &http.Client{},
+	}
+
+	req := &models.Request{
+		Model: "claude-3-sonnet-20240229",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err == nil {
+		t.Error("Expected error for invalid JSON response, got nil")
+		return
+	}
+	if resp != nil {
+		t.Error("Expected nil response for JSON parse error")
+	}
+}
+
+func TestAnthropic_SendRequest_WithCustomHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify custom headers are set
+		if r.Header.Get("custom-header") != "custom-value" {
+			t.Errorf("Expected custom-header, got: %s", r.Header.Get("custom-header"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"id": "msg_test123",
+			"type": "message",
+			"role": "assistant",
+			"content": [{"type": "text", "text": "Hello! How can I help you today?"}],
+			"usage": {"input_tokens": 10, "output_tokens": 15}
+		}`))
+	}))
+	defer server.Close()
+
+	vendor := &AnthropicVendor{
+		config: &models.VendorConfig{
+			APIKey:  "test-key",
+			BaseURL: server.URL,
+			Headers: map[string]string{
+				"custom-header": "custom-value",
+			},
+		},
+		client: &http.Client{},
+	}
+
+	req := &models.Request{
+		Model: "claude-3-sonnet-20240229",
+		Messages: []models.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	resp, err := vendor.SendRequest(context.TODO(), req)
+	if err != nil {
+		t.Errorf("Expected success, got error: %v", err)
+		return
+	}
+	if resp == nil {
+		t.Error("Expected response, got nil")
+		return
+	}
+	if resp.Content != "Hello! How can I help you today?" {
+		t.Errorf("Expected 'Hello! How can I help you today?', got: %s", resp.Content)
 	}
 }

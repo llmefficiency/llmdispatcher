@@ -65,6 +65,10 @@ func NewWithConfig(config *Config) *Dispatcher {
 
 // Send sends a request to the appropriate vendor
 func (d *Dispatcher) Send(ctx context.Context, req *Request) (*Response, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request cannot be nil")
+	}
+
 	internalReq := &models.Request{
 		Model:       req.Model,
 		Messages:    make([]models.Message, len(req.Messages)),
@@ -104,6 +108,10 @@ func (d *Dispatcher) Send(ctx context.Context, req *Request) (*Response, error) 
 
 // SendStreaming sends a streaming request to the appropriate vendor
 func (d *Dispatcher) SendStreaming(ctx context.Context, req *Request) (*StreamingResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request cannot be nil")
+	}
+
 	internalReq := &models.Request{
 		Model:       req.Model,
 		Messages:    make([]models.Message, len(req.Messages)),
