@@ -217,50 +217,55 @@ func TestConfig_Validation(t *testing.T) {
 	tests := []struct {
 		name    string
 		config  *Config
-		isValid bool
+		wantErr bool
 	}{
 		{
 			name: "valid config",
 			config: &Config{
-				DefaultVendor:  "openai",
-				FallbackVendor: "anthropic",
-				Timeout:        30 * time.Second,
-				EnableLogging:  true,
-				EnableMetrics:  true,
+				Mode:          AutoMode,
+				Timeout:       30 * time.Second,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
-			isValid: true,
+			wantErr: false,
 		},
 		{
 			name: "empty default vendor",
 			config: &Config{
-				DefaultVendor: "",
+				Mode:          AutoMode,
 				Timeout:       30 * time.Second,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
-			isValid: false,
+			wantErr: false,
 		},
 		{
 			name: "zero timeout",
 			config: &Config{
-				DefaultVendor: "openai",
+				Mode:          AutoMode,
 				Timeout:       0,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
-			isValid: true, // Zero timeout is valid (no timeout)
+			wantErr: false,
 		},
 		{
 			name: "negative timeout",
 			config: &Config{
-				DefaultVendor: "openai",
+				Mode:          AutoMode,
 				Timeout:       -1 * time.Second,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
-			isValid: false,
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateConfig(tt.config)
-			if (err == nil) != tt.isValid {
-				t.Errorf("validateConfig() error = %v, isValid %v", err, tt.isValid)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -361,8 +366,8 @@ func validateConfig(config *Config) error {
 	if config == nil {
 		return &MockError{message: "config cannot be nil"}
 	}
-	if config.DefaultVendor == "" {
-		return &MockError{message: "default vendor is required"}
+	if config.Mode == "" {
+		return &MockError{message: "mode is required"}
 	}
 	if config.Timeout < 0 {
 		return &MockError{message: "timeout must be non-negative"}

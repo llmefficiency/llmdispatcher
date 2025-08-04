@@ -13,11 +13,10 @@ import (
 	"github.com/llmefficiency/llmdispatcher/internal/dispatcher"
 	"github.com/llmefficiency/llmdispatcher/internal/models"
 	"github.com/llmefficiency/llmdispatcher/internal/vendors"
-	"github.com/llmefficiency/llmdispatcher/pkg/llmdispatcher"
 )
 
 // printResponse prints a formatted response
-func printResponse(vendor, model, content string, usage llmdispatcher.Usage) {
+func printResponse(vendor, model, content string, usage models.Usage) {
 	fmt.Printf("\n📝 Response from %s:\n", vendor)
 	fmt.Printf("Model: %s\n", model)
 	fmt.Printf("Content: %s\n", content)
@@ -26,16 +25,7 @@ func printResponse(vendor, model, content string, usage llmdispatcher.Usage) {
 }
 
 // printStats prints dispatcher statistics
-func printStats(stats *llmdispatcher.Stats) {
-	fmt.Printf("\n📊 Dispatcher Statistics:\n")
-	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
-	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
-	fmt.Printf("Failed Requests: %d\n", stats.FailedRequests)
-	fmt.Printf("Average Latency: %v\n", stats.AverageLatency)
-}
-
-// printInternalStats prints internal dispatcher statistics
-func printInternalStats(stats *models.DispatcherStats) {
+func printStats(stats *models.DispatcherStats) {
 	fmt.Printf("\n📊 Dispatcher Statistics:\n")
 	fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
 	fmt.Printf("Successful Requests: %d\n", stats.SuccessfulRequests)
@@ -103,26 +93,31 @@ func main() {
 	azureOpenAIAPIKey := os.Getenv("AZURE_OPENAI_API_KEY")
 
 	// Create dispatcher with configuration
-	config := &llmdispatcher.Config{
-		DefaultVendor:  "openai",
-		FallbackVendor: "anthropic",
-		Timeout:        30 * time.Second,
-		EnableLogging:  true,
-		EnableMetrics:  true,
-		RetryPolicy: &llmdispatcher.RetryPolicy{
+	config := &models.Config{
+		Mode:          models.AutoMode,
+		Timeout:       30 * time.Second,
+		EnableLogging: true,
+		EnableMetrics: true,
+		RetryPolicy: &models.RetryPolicy{
 			MaxRetries:      3,
-			BackoffStrategy: llmdispatcher.ExponentialBackoff,
+			BackoffStrategy: models.ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		// Use cascading failure strategy
-		RoutingStrategy: llmdispatcher.NewCascadingFailureStrategy([]string{"openai", "anthropic", "google"}),
+		ModeOverrides: &models.ModeOverrides{
+			VendorPreferences: map[models.Mode][]string{
+				models.AutoMode:          {"openai", "anthropic", "google"},
+				models.FastMode:          {"local", "anthropic", "openai"},
+				models.SophisticatedMode: {"anthropic", "openai", "google"},
+				models.CostSavingMode:    {"local", "google", "openai", "anthropic"},
+			},
+		},
 	}
 
-	dispatcher := llmdispatcher.NewWithConfig(config)
+	disp := dispatcher.NewWithConfig(config)
 
 	// Register OpenAI vendor (if API key is available)
 	if openaiAPIKey != "" {
-		openaiConfig := &llmdispatcher.VendorConfig{
+		openaiConfig := &models.VendorConfig{
 			APIKey:  openaiAPIKey,
 			Timeout: 30 * time.Second,
 			Headers: map[string]string{
@@ -130,8 +125,8 @@ func main() {
 			},
 		}
 
-		openaiVendor := llmdispatcher.NewOpenAIVendor(openaiConfig)
-		if err := dispatcher.RegisterVendor(openaiVendor); err != nil {
+		openaiVendor := vendors.NewOpenAI(openaiConfig)
+		if err := disp.RegisterVendor(openaiVendor); err != nil {
 			log.Printf("Failed to register OpenAI vendor: %v", err)
 		} else {
 			log.Println("✅ Registered OpenAI vendor")
@@ -142,7 +137,7 @@ func main() {
 
 	// Register Anthropic vendor (when implemented)
 	if anthropicAPIKey != "" {
-		anthropicConfig := &llmdispatcher.VendorConfig{
+		anthropicConfig := &models.VendorConfig{
 			APIKey:  anthropicAPIKey,
 			Timeout: 30 * time.Second,
 			Headers: map[string]string{
@@ -150,8 +145,8 @@ func main() {
 			},
 		}
 
-		anthropicVendor := llmdispatcher.NewAnthropicVendor(anthropicConfig)
-		if err := dispatcher.RegisterVendor(anthropicVendor); err != nil {
+		anthropicVendor := vendors.NewAnthropic(anthropicConfig)
+		if err := disp.RegisterVendor(anthropicVendor); err != nil {
 			log.Printf("Failed to register Anthropic vendor: %v", err)
 		} else {
 			log.Println("✅ Registered Anthropic vendor")
@@ -162,7 +157,7 @@ func main() {
 
 	// Register Google vendor (when implemented)
 	if googleAPIKey != "" {
-		googleConfig := &llmdispatcher.VendorConfig{
+		googleConfig := &models.VendorConfig{
 			APIKey:  googleAPIKey,
 			Timeout: 30 * time.Second,
 			Headers: map[string]string{
@@ -170,8 +165,8 @@ func main() {
 			},
 		}
 
-		googleVendor := llmdispatcher.NewGoogleVendor(googleConfig)
-		if err := dispatcher.RegisterVendor(googleVendor); err != nil {
+		googleVendor := vendors.NewGoogle(googleConfig)
+		if err := disp.RegisterVendor(googleVendor); err != nil {
 			log.Printf("Failed to register Google vendor: %v", err)
 		} else {
 			log.Println("✅ Registered Google vendor")
@@ -182,7 +177,7 @@ func main() {
 
 	// Register Azure OpenAI vendor (when implemented)
 	if azureOpenAIAPIKey != "" {
-		azureConfig := &llmdispatcher.VendorConfig{
+		azureConfig := &models.VendorConfig{
 			APIKey:  azureOpenAIAPIKey,
 			BaseURL: os.Getenv("AZURE_OPENAI_ENDPOINT"),
 			Timeout: 30 * time.Second,
@@ -191,8 +186,8 @@ func main() {
 			},
 		}
 
-		azureVendor := llmdispatcher.NewAzureOpenAIVendor(azureConfig)
-		if err := dispatcher.RegisterVendor(azureVendor); err != nil {
+		azureVendor := vendors.NewAzureOpenAI(azureConfig)
+		if err := disp.RegisterVendor(azureVendor); err != nil {
 			log.Printf("Failed to register Azure OpenAI vendor: %v", err)
 		} else {
 			log.Println("✅ Registered Azure OpenAI vendor")
@@ -202,7 +197,7 @@ func main() {
 	}
 
 	// Check if we have any vendors registered
-	vendors := dispatcher.GetVendors()
+	vendors := disp.GetVendors()
 	if len(vendors) == 0 {
 		log.Fatal("No vendors registered. Please set at least one API key.")
 	}
@@ -210,9 +205,9 @@ func main() {
 	log.Printf("✅ Registered vendors: %v", vendors)
 
 	// Create a request
-	request := &llmdispatcher.Request{
+	request := &models.Request{
 		Model: "gpt-3.5-turbo",
-		Messages: []llmdispatcher.Message{
+		Messages: []models.Message{
 			{
 				Role:    "user",
 				Content: "Hello! Can you tell me a short joke?",
@@ -224,7 +219,7 @@ func main() {
 
 	// Send the request
 	ctx := context.Background()
-	response, err := dispatcher.Send(ctx, request)
+	response, err := disp.Send(ctx, request)
 	if err != nil {
 		log.Fatalf("Failed to send request: %v", err)
 	}
@@ -233,7 +228,7 @@ func main() {
 	printResponse(response.Vendor, response.Model, response.Content, response.Usage)
 
 	// Print statistics
-	stats := dispatcher.GetStats()
+	stats := disp.GetStats()
 	printStats(stats)
 
 	// Print vendor statistics
@@ -254,16 +249,12 @@ func runLocalMode(modelPath, serverURL string) {
 
 	// Create dispatcher with local configuration
 	config := &models.Config{
-		DefaultVendor: "local",
+		Mode:          models.CostSavingMode, // Use cost-saving mode for local
 		Timeout:       60 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,
-		CostOptimization: &models.CostOptimization{
-			Enabled:     true,
-			PreferCheap: true,
-			VendorCosts: map[string]float64{
-				"local": 0.0001, // Cheapest option
-			},
+		ModeOverrides: &models.ModeOverrides{
+			MaxCostPerRequest: 0.0001, // Very low cost for local
 		},
 	}
 
@@ -396,7 +387,7 @@ func runLocalMode(modelPath, serverURL string) {
 
 	// Print statistics
 	stats := disp.GetStats()
-	printInternalStats(stats)
+	printStats(stats)
 
 	log.Println("🎉 Local mode test completed successfully!")
 }
@@ -419,7 +410,7 @@ func runVendorMode(vendorOverride, modelPath, serverURL string) {
 
 	// Create dispatcher with vendor configuration
 	config := &models.Config{
-		DefaultVendor: targetVendor,
+		Mode:          models.AutoMode, // Use auto mode for vendor testing
 		Timeout:       60 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,
@@ -594,7 +585,7 @@ func runVendorMode(vendorOverride, modelPath, serverURL string) {
 
 	// Print statistics
 	stats := disp.GetStats()
-	printInternalStats(stats)
+	printStats(stats)
 
 	log.Printf("🎉 Vendor mode test completed successfully for %s!", targetVendor)
 }

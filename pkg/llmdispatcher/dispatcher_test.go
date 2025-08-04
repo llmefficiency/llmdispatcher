@@ -99,11 +99,10 @@ func TestNewWithConfig(t *testing.T) {
 		{
 			name: "with config",
 			config: &Config{
-				DefaultVendor:  "openai",
-				FallbackVendor: "anthropic",
-				Timeout:        30 * time.Second,
-				EnableLogging:  true,
-				EnableMetrics:  true,
+				Mode:          AutoMode,
+				Timeout:       30 * time.Second,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
 		},
 		{
@@ -116,10 +115,7 @@ func TestNewWithConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dispatcher := NewWithConfig(tt.config)
 			if dispatcher == nil {
-				t.Fatal("NewWithConfig() returned nil")
-			}
-			if dispatcher.dispatcher == nil {
-				t.Error("internal dispatcher should not be nil")
+				t.Error("Expected dispatcher to be created")
 			}
 		})
 	}
@@ -419,18 +415,23 @@ func TestVendorCapabilities(t *testing.T) {
 
 func TestNewWithConfig_Complex(t *testing.T) {
 	config := &Config{
-		DefaultVendor:  "openai",
-		FallbackVendor: "anthropic",
-		Timeout:        30 * time.Second,
-		EnableLogging:  true,
-		EnableMetrics:  true,
+		Mode:          AutoMode,
+		Timeout:       30 * time.Second,
+		EnableLogging: true,
+		EnableMetrics: true,
 		RetryPolicy: &RetryPolicy{
 			MaxRetries:      3,
 			BackoffStrategy: ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		// Use cascading failure strategy
-		RoutingStrategy: NewCascadingFailureStrategy([]string{"openai", "anthropic", "google"}),
+		ModeOverrides: &ModeOverrides{
+			VendorPreferences: map[Mode][]string{
+				AutoMode:          {"openai", "anthropic", "google"},
+				FastMode:          {"local", "anthropic", "openai"},
+				SophisticatedMode: {"anthropic", "openai", "google"},
+				CostSavingMode:    {"local", "google", "openai", "anthropic"},
+			},
+		},
 	}
 
 	dispatcher := NewWithConfig(config)

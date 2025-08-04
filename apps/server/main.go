@@ -70,19 +70,22 @@ func NewWebService() *WebService {
 
 	// Create dispatcher configuration
 	config := &models.Config{
-		DefaultVendor:  "openai",
-		FallbackVendor: "anthropic",
-		Timeout:        30 * time.Second,
-		EnableLogging:  true,
-		EnableMetrics:  true,
+		Mode:          models.AutoMode,
+		Timeout:       30 * time.Second,
+		EnableLogging: true,
+		EnableMetrics: true,
 		RetryPolicy: &models.RetryPolicy{
 			MaxRetries:      3,
 			BackoffStrategy: models.ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		// Use cascading failure strategy
-		RoutingStrategy: &models.CascadingFailureStrategy{
-			VendorOrder: []string{"openai", "anthropic", "google"},
+		ModeOverrides: &models.ModeOverrides{
+			VendorPreferences: map[models.Mode][]string{
+				models.AutoMode:          {"openai", "anthropic", "google"},
+				models.FastMode:          {"local", "anthropic", "openai"},
+				models.SophisticatedMode: {"anthropic", "openai", "google"},
+				models.CostSavingMode:    {"local", "google", "openai", "anthropic"},
+			},
 		},
 	}
 

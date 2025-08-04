@@ -22,7 +22,7 @@ type Dispatcher struct {
 // New creates a new dispatcher with default configuration
 func New() *Dispatcher {
 	return NewWithConfig(&models.Config{
-		DefaultVendor: "",
+		Mode:          models.AutoMode,
 		Timeout:       30 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,
@@ -92,23 +92,7 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 		defer cancel()
 	}
 
-	// Use routing strategy if available
-	if d.config.RoutingStrategy != nil {
-		vendor, err := d.config.RoutingStrategy.SelectVendor(ctx, req, d.vendors)
-		if err != nil {
-			d.updateStats(false, "", time.Since(start))
-			return nil, fmt.Errorf("routing strategy failed: %w", err)
-		}
-		response, err := d.sendWithRetry(ctx, vendor, req)
-		if err != nil {
-			d.updateStats(false, vendor.Name(), time.Since(start))
-			return nil, err
-		}
-		d.updateStats(true, vendor.Name(), time.Since(start))
-		return response, nil
-	}
-
-	// Fallback to default vendor selection logic
+	// Use mode-based vendor selection
 	vendor, err := d.selectVendor(ctx, req)
 	if err != nil {
 		d.updateStats(false, "", time.Since(start))
@@ -279,43 +263,28 @@ func (d *Dispatcher) SendStreamingToVendor(ctx context.Context, vendorName strin
 	return streamingResp, nil
 }
 
-// selectVendor determines which vendor should handle the request
+// selectVendor selects the appropriate vendor based on mode and availability
 func (d *Dispatcher) selectVendor(ctx context.Context, req *models.Request) (models.LLMVendor, error) {
-	if len(d.vendors) == 0 {
-		return nil, models.ErrNoVendorsRegistered
+	// Create mode strategy for vendor selection
+	modeStrategy := models.NewModeStrategy(d.config.Mode, d.config, d.vendors)
+
+	// Use mode-based vendor selection
+	vendor, err := modeStrategy.SelectVendor(ctx, req, d.vendors)
+	if err != nil {
+		d.logger.Printf("Mode-based routing failed: %v", err)
 	}
 
-	// Use default vendor if specified
-	if d.config.DefaultVendor != "" {
-		if vendor, exists := d.vendors[d.config.DefaultVendor]; exists {
+	// If mode-based selection failed, try any available vendor
+	if vendor == nil {
+		for name, vendor := range d.vendors {
 			if vendor.IsAvailable(ctx) {
+				d.logger.Printf("Using available vendor: %s", name)
 				return vendor, nil
 			}
-			d.logger.Printf("Default vendor %s is not available", d.config.DefaultVendor)
-		} else {
-			d.logger.Printf("Default vendor %s not found", d.config.DefaultVendor)
 		}
 	}
 
-	// Try fallback vendor
-	if d.config.FallbackVendor != "" && d.config.FallbackVendor != d.config.DefaultVendor {
-		if vendor, exists := d.vendors[d.config.FallbackVendor]; exists {
-			if vendor.IsAvailable(ctx) {
-				return vendor, nil
-			}
-			d.logger.Printf("Fallback vendor %s is not available", d.config.FallbackVendor)
-		}
-	}
-
-	// Fallback to first available vendor
-	for name, vendor := range d.vendors {
-		if vendor.IsAvailable(ctx) {
-			d.logger.Printf("Using fallback vendor: %s", name)
-			return vendor, nil
-		}
-	}
-
-	return nil, models.ErrVendorUnavailable
+	return vendor, err
 }
 
 // sendWithRetry sends a request with retry logic
@@ -350,18 +319,6 @@ func (d *Dispatcher) sendWithRetry(ctx context.Context, vendor models.LLMVendor,
 		}
 
 		break
-	}
-
-	// If we have a fallback vendor, try it
-	if d.config.FallbackVendor != "" && vendor.Name() != d.config.FallbackVendor {
-		if fallbackVendor, exists := d.vendors[d.config.FallbackVendor]; exists {
-			d.logger.Printf("Trying fallback vendor: %s", d.config.FallbackVendor)
-			fallbackResponse, fallbackErr := fallbackVendor.SendRequest(ctx, req)
-			if fallbackErr == nil {
-				return fallbackResponse, nil
-			}
-			d.logger.Printf("Fallback vendor also failed: %v", fallbackErr)
-		}
 	}
 
 	return nil, fmt.Errorf("all attempts failed: %w", lastErr)

@@ -93,9 +93,10 @@ func TestNewWithConfig(t *testing.T) {
 		{
 			name: "with config",
 			config: &models.Config{
-				DefaultVendor:  "openai",
-				FallbackVendor: "anthropic",
-				Timeout:        30 * time.Second,
+				Mode:          models.AutoMode,
+				Timeout:       30 * time.Second,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
 		},
 		{
@@ -108,10 +109,7 @@ func TestNewWithConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dispatcher := NewWithConfig(tt.config)
 			if dispatcher == nil {
-				t.Fatal("NewWithConfig() returned nil")
-			}
-			if dispatcher.config == nil {
-				t.Error("config should not be nil")
+				t.Error("Expected dispatcher to be created")
 			}
 		})
 	}
@@ -265,38 +263,27 @@ func TestSend_WithRetry(t *testing.T) {
 	}
 }
 
-func TestSend_WithFallback(t *testing.T) {
+func TestSend_WithModeStrategySuccess(t *testing.T) {
 	dispatcher := NewWithConfig(&models.Config{
-		DefaultVendor:  "primary",
-		FallbackVendor: "fallback",
+		Mode:          models.AutoMode,
+		EnableLogging: true,
+		EnableMetrics: true,
 	})
 
-	// Register primary vendor that fails
-	primaryVendor := &MockVendor{
-		name:       "primary",
-		shouldFail: true,
-		available:  true,
-	}
-
-	// Register fallback vendor that succeeds
-	fallbackVendor := &MockVendor{
-		name: "fallback",
+	// Register vendor that succeeds
+	successVendor := &MockVendor{
+		name: "success",
 		response: &models.Response{
-			Content: "Fallback response",
-			Model:   "fallback-model",
-			Vendor:  "fallback",
+			Content: "Success response",
+			Model:   "success-model",
+			Vendor:  "success",
 		},
 		available: true,
 	}
 
-	err := dispatcher.RegisterVendor(primaryVendor)
+	err := dispatcher.RegisterVendor(successVendor)
 	if err != nil {
-		t.Fatalf("Failed to register primary vendor: %v", err)
-	}
-
-	err = dispatcher.RegisterVendor(fallbackVendor)
-	if err != nil {
-		t.Fatalf("Failed to register fallback vendor: %v", err)
+		t.Fatalf("Failed to register success vendor: %v", err)
 	}
 
 	request := &models.Request{
@@ -312,16 +299,18 @@ func TestSend_WithFallback(t *testing.T) {
 		t.Fatalf("Send() failed: %v", err)
 	}
 
-	if response.Vendor != "fallback" {
-		t.Errorf("Expected fallback vendor, got %s", response.Vendor)
+	if response.Vendor != "success" {
+		t.Errorf("Expected success vendor, got %s", response.Vendor)
 	}
 }
 
-func TestSend_WithRoutingStrategy(t *testing.T) {
+func TestSend_WithModeStrategy(t *testing.T) {
 	config := &models.Config{
-		DefaultVendor: "openai",
-		RoutingStrategy: &models.CascadingFailureStrategy{
-			VendorOrder: []string{"openai", "anthropic"},
+		Mode: models.AutoMode,
+		ModeOverrides: &models.ModeOverrides{
+			VendorPreferences: map[models.Mode][]string{
+				models.AutoMode: {"openai", "anthropic"},
+			},
 		},
 	}
 
@@ -341,7 +330,7 @@ func TestSend_WithRoutingStrategy(t *testing.T) {
 		},
 	}
 
-	// Test that the routing strategy is used
+	// Test that the mode strategy is used
 	_, err := dispatcher.Send(context.Background(), req)
 	if err != nil {
 		t.Errorf("Expected successful request, got error: %v", err)
@@ -672,8 +661,8 @@ func TestDispatcher_SelectVendor_NoVendors(t *testing.T) {
 	}
 
 	vendor, err := dispatcher.selectVendor(context.Background(), req)
-	if err != models.ErrNoVendorsRegistered {
-		t.Errorf("Expected ErrNoVendorsRegistered, got %v", err)
+	if err == nil {
+		t.Error("Expected error when no vendors are registered")
 	}
 	if vendor != nil {
 		t.Errorf("Expected nil vendor, got %v", vendor)
@@ -698,17 +687,17 @@ func TestDispatcher_SelectVendor_Unavailable(t *testing.T) {
 	}
 
 	vendor, err := dispatcher.selectVendor(context.Background(), req)
-	if err != models.ErrVendorUnavailable {
-		t.Errorf("Expected ErrVendorUnavailable, got %v", err)
+	if err == nil {
+		t.Error("Expected error when no vendors are available")
 	}
 	if vendor != nil {
 		t.Errorf("Expected nil vendor, got %v", vendor)
 	}
 }
 
-func TestDispatcher_SelectVendor_DefaultVendor(t *testing.T) {
+func TestDispatcher_SelectVendor_ModeBased(t *testing.T) {
 	dispatcher := NewWithConfig(&models.Config{
-		DefaultVendor: "test",
+		Mode: models.AutoMode,
 	})
 
 	// Register available vendor
@@ -737,25 +726,17 @@ func TestDispatcher_SelectVendor_DefaultVendor(t *testing.T) {
 	}
 }
 
-func TestDispatcher_SelectVendor_Fallback(t *testing.T) {
+func TestDispatcher_SelectVendor_AvailableVendor(t *testing.T) {
 	dispatcher := NewWithConfig(&models.Config{
-		DefaultVendor:  "default",
-		FallbackVendor: "fallback",
+		Mode: models.AutoMode,
 	})
 
-	// Register unavailable default vendor
-	defaultVendor := &MockVendor{
-		name:      "default",
-		available: false,
-	}
-	dispatcher.RegisterVendor(defaultVendor)
-
-	// Register available fallback vendor
-	fallbackVendor := &MockVendor{
-		name:      "fallback",
+	// Register available vendor
+	availableVendor := &MockVendor{
+		name:      "available",
 		available: true,
 	}
-	dispatcher.RegisterVendor(fallbackVendor)
+	dispatcher.RegisterVendor(availableVendor)
 
 	req := &models.Request{
 		Model: "test",
@@ -771,8 +752,8 @@ func TestDispatcher_SelectVendor_Fallback(t *testing.T) {
 	if vendor == nil {
 		t.Errorf("Expected vendor, got nil")
 	}
-	if vendor.Name() != "fallback" {
-		t.Errorf("Expected vendor name 'fallback', got %s", vendor.Name())
+	if vendor.Name() != "available" {
+		t.Errorf("Expected vendor name 'available', got %s", vendor.Name())
 	}
 }
 

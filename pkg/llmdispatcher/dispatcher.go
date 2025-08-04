@@ -25,39 +25,23 @@ func NewWithConfig(config *Config) *Dispatcher {
 	internalConfig := &models.Config{}
 
 	if config != nil {
-		internalConfig.DefaultVendor = config.DefaultVendor
-		internalConfig.FallbackVendor = config.FallbackVendor
+		internalConfig.Mode = models.Mode(config.Mode)
 		internalConfig.Timeout = config.Timeout
 		internalConfig.EnableLogging = config.EnableLogging
 		internalConfig.EnableMetrics = config.EnableMetrics
 
-		// Copy advanced routing options
-		if config.CostOptimization != nil {
-			internalConfig.CostOptimization = &models.CostOptimization{
-				Enabled:     config.CostOptimization.Enabled,
-				MaxCost:     config.CostOptimization.MaxCost,
-				PreferCheap: config.CostOptimization.PreferCheap,
-				VendorCosts: config.CostOptimization.VendorCosts,
+		// Copy mode overrides if provided
+		if config.ModeOverrides != nil {
+			internalConfig.ModeOverrides = &models.ModeOverrides{
+				VendorPreferences:   make(map[models.Mode][]string),
+				MaxCostPerRequest:   config.ModeOverrides.MaxCostPerRequest,
+				MaxLatency:          config.ModeOverrides.MaxLatency,
+				SophisticatedModels: config.ModeOverrides.SophisticatedModels,
 			}
-		}
 
-		if config.LatencyOptimization != nil {
-			internalConfig.LatencyOptimization = &models.LatencyOptimization{
-				Enabled:        config.LatencyOptimization.Enabled,
-				MaxLatency:     config.LatencyOptimization.MaxLatency,
-				PreferFast:     config.LatencyOptimization.PreferFast,
-				LatencyWeights: config.LatencyOptimization.LatencyWeights,
-			}
-		}
-
-		// Copy routing strategy if provided
-		if config.RoutingStrategy != nil {
-			// Convert public routing strategy to internal one
-			switch strategy := config.RoutingStrategy.(type) {
-			case *CascadingFailureStrategy:
-				internalConfig.RoutingStrategy = &models.CascadingFailureStrategy{
-					VendorOrder: strategy.VendorOrder,
-				}
+			// Copy vendor preferences
+			for mode, preferences := range config.ModeOverrides.VendorPreferences {
+				internalConfig.ModeOverrides.VendorPreferences[models.Mode(mode)] = preferences
 			}
 		}
 	}

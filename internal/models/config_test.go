@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -21,38 +22,42 @@ func TestConfig_Validation(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid config",
+			name: "valid_config",
 			config: &Config{
-				DefaultVendor:  "openai",
-				FallbackVendor: "anthropic",
-				Timeout:        30 * time.Second,
-				EnableLogging:  true,
-				EnableMetrics:  true,
+				Mode:          AutoMode,
+				Timeout:       30 * time.Second,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
 			wantErr: false,
 		},
 		{
-			name: "empty default vendor",
+			name: "empty_default_vendor",
 			config: &Config{
-				DefaultVendor:  "",
-				FallbackVendor: "anthropic",
-				Timeout:        30 * time.Second,
+				Mode:          AutoMode,
+				Timeout:       30 * time.Second,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
-			wantErr: false, // This is valid - no default vendor
+			wantErr: false,
 		},
 		{
-			name: "zero timeout",
+			name: "zero_timeout",
 			config: &Config{
-				DefaultVendor: "openai",
+				Mode:          AutoMode,
 				Timeout:       0,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
-			wantErr: false, // This is valid - no timeout
+			wantErr: false,
 		},
 		{
-			name: "negative timeout",
+			name: "negative_timeout",
 			config: &Config{
-				DefaultVendor: "openai",
+				Mode:          AutoMode,
 				Timeout:       -1 * time.Second,
+				EnableLogging: true,
+				EnableMetrics: true,
 			},
 			wantErr: true,
 		},
@@ -157,77 +162,55 @@ func TestBackoffStrategy_Validation(t *testing.T) {
 	}
 }
 
-func TestRoutingStrategy_Validation(t *testing.T) {
+func TestModeStrategy_Validation(t *testing.T) {
 	tests := []struct {
-		name     string
-		strategy RoutingStrategy
-		wantErr  bool
+		name    string
+		mode    Mode
+		wantErr bool
 	}{
 		{
-			name: "valid_cascading_strategy",
-			strategy: &CascadingFailureStrategy{
-				VendorOrder: []string{"openai", "anthropic"},
-			},
+			name:    "valid_fast_mode",
+			mode:    FastMode,
 			wantErr: false,
 		},
 		{
-			name: "empty_vendor_order",
-			strategy: &CascadingFailureStrategy{
-				VendorOrder: []string{},
-			},
-			wantErr: true,
+			name:    "valid_sophisticated_mode",
+			mode:    SophisticatedMode,
+			wantErr: false,
 		},
 		{
-			name:     "nil_strategy",
-			strategy: nil,
-			wantErr:  false, // nil is valid (optional)
+			name:    "valid_cost_saving_mode",
+			mode:    CostSavingMode,
+			wantErr: false,
+		},
+		{
+			name:    "valid_auto_mode",
+			mode:    AutoMode,
+			wantErr: false,
+		},
+		{
+			name:    "invalid_mode",
+			mode:    Mode("invalid"),
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateRoutingStrategy(tt.strategy)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateRoutingStrategy() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
+			config := &Config{Mode: tt.mode}
+			strategy := NewModeStrategy(tt.mode, config, make(map[string]LLMVendor))
 
-func TestCascadingFailureStrategy_Validation(t *testing.T) {
-	tests := []struct {
-		name     string
-		strategy CascadingFailureStrategy
-		wantErr  bool
-	}{
-		{
-			name: "valid_strategy",
-			strategy: CascadingFailureStrategy{
-				VendorOrder: []string{"openai", "anthropic", "google"},
-			},
-			wantErr: false,
-		},
-		{
-			name: "empty_vendor_order",
-			strategy: CascadingFailureStrategy{
-				VendorOrder: []string{},
-			},
-			wantErr: true,
-		},
-		{
-			name: "single_vendor",
-			strategy: CascadingFailureStrategy{
-				VendorOrder: []string{"openai"},
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateCascadingFailureStrategy(tt.strategy)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateCascadingFailureStrategy() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				// For invalid mode, SelectVendor should return an error
+				_, err := strategy.SelectVendor(context.Background(), &Request{}, make(map[string]LLMVendor))
+				if err == nil {
+					t.Errorf("Expected error for invalid mode %s", tt.mode)
+				}
+			} else {
+				// For valid modes, the strategy should be created successfully
+				if strategy.Name() != string(tt.mode) {
+					t.Errorf("Expected strategy name %s, got %s", tt.mode, strategy.Name())
+				}
 			}
 		})
 	}
@@ -364,38 +347,34 @@ func TestVendorStats_Validation(t *testing.T) {
 	}
 }
 
-func TestCostOptimization_Validation(t *testing.T) {
+func TestModeOverrides_Validation(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *CostOptimization
+		config  *ModeOverrides
 		wantErr bool
 	}{
 		{
-			name: "valid cost optimization",
-			config: &CostOptimization{
-				Enabled:     true,
-				MaxCost:     0.10,
-				PreferCheap: true,
-				VendorCosts: map[string]float64{
-					"openai":    0.002,
-					"anthropic": 0.003,
-					"google":    0.001,
+			name: "valid mode overrides",
+			config: &ModeOverrides{
+				VendorPreferences: map[Mode][]string{
+					FastMode:          {"local", "anthropic"},
+					SophisticatedMode: {"anthropic", "openai"},
 				},
+				MaxCostPerRequest:   0.01,
+				MaxLatency:          2 * time.Second,
+				SophisticatedModels: []string{"claude-3-opus", "gpt-4"},
 			},
 			wantErr: false,
 		},
 		{
-			name: "disabled cost optimization",
-			config: &CostOptimization{
-				Enabled: false,
-			},
-			wantErr: false,
+			name:    "nil mode overrides",
+			config:  nil,
+			wantErr: false, // nil is valid (optional)
 		},
 		{
 			name: "negative max cost",
-			config: &CostOptimization{
-				Enabled: true,
-				MaxCost: -0.10,
+			config: &ModeOverrides{
+				MaxCostPerRequest: -0.01,
 			},
 			wantErr: true,
 		},
@@ -403,105 +382,39 @@ func TestCostOptimization_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// For now, we don't have validation for CostOptimization
-			// This test ensures the structure works correctly
-			if tt.config == nil {
-				t.Error("Config should not be nil")
-			}
-		})
-	}
-}
-
-func TestLatencyOptimization_Validation(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  *LatencyOptimization
-		wantErr bool
-	}{
-		{
-			name: "valid latency optimization",
-			config: &LatencyOptimization{
-				Enabled:    true,
-				MaxLatency: 30 * time.Second,
-				PreferFast: true,
-				LatencyWeights: map[string]float64{
-					"openai":    1.0,
-					"anthropic": 1.2,
-					"google":    0.8,
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "disabled latency optimization",
-			config: &LatencyOptimization{
-				Enabled: false,
-			},
-			wantErr: false,
-		},
-		{
-			name: "negative max latency",
-			config: &LatencyOptimization{
-				Enabled:    true,
-				MaxLatency: -30 * time.Second,
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// For now, we don't have validation for LatencyOptimization
-			// This test ensures the structure works correctly
-			if tt.config == nil {
-				t.Error("Config should not be nil")
-			}
+			// For now, we don't have validation for ModeOverrides
+			// This test is a placeholder for future validation logic
+			_ = tt
 		})
 	}
 }
 
 func TestConfig_AdvancedRouting(t *testing.T) {
 	config := &Config{
-		DefaultVendor: "openai",
-		RoutingStrategy: &CascadingFailureStrategy{
-			VendorOrder: []string{"openai", "anthropic", "google"},
-		},
-		CostOptimization: &CostOptimization{
-			Enabled:     true,
-			MaxCost:     0.10,
-			PreferCheap: true,
-			VendorCosts: map[string]float64{
-				"openai":    0.002,
-				"anthropic": 0.008,
-				"google":    0.001,
+		Mode: AutoMode,
+		ModeOverrides: &ModeOverrides{
+			VendorPreferences: map[Mode][]string{
+				AutoMode:          {"openai", "anthropic", "google"},
+				FastMode:          {"local", "anthropic"},
+				SophisticatedMode: {"anthropic", "openai"},
+				CostSavingMode:    {"local", "google", "openai"},
 			},
-		},
-		LatencyOptimization: &LatencyOptimization{
-			Enabled:    true,
-			MaxLatency: 5 * time.Second,
-			PreferFast: true,
-			LatencyWeights: map[string]float64{
-				"openai":    1.0,
-				"anthropic": 1.2,
-				"google":    0.8,
-			},
+			MaxCostPerRequest:   0.10,
+			MaxLatency:          5 * time.Second,
+			SophisticatedModels: []string{"claude-3-opus", "gpt-4", "gemini-pro"},
 		},
 	}
 
-	if config.DefaultVendor != "openai" {
-		t.Errorf("Expected default vendor 'openai', got '%s'", config.DefaultVendor)
+	if config.Mode != AutoMode {
+		t.Errorf("Expected mode 'auto', got '%s'", config.Mode)
 	}
 
-	if config.RoutingStrategy == nil {
-		t.Error("Expected routing strategy to be set")
+	if config.ModeOverrides == nil {
+		t.Error("Expected mode overrides to be set")
 	}
 
-	if config.CostOptimization == nil {
-		t.Error("Expected cost optimization to be set")
-	}
-
-	if config.LatencyOptimization == nil {
-		t.Error("Expected latency optimization to be set")
+	if len(config.ModeOverrides.VendorPreferences) != 4 {
+		t.Errorf("Expected 4 mode preferences, got %d", len(config.ModeOverrides.VendorPreferences))
 	}
 }
 
@@ -591,27 +504,6 @@ func validateBackoffStrategy(strategy BackoffStrategy) error {
 	default:
 		return &MockError{message: "invalid backoff strategy"}
 	}
-}
-
-func validateRoutingStrategy(strategy RoutingStrategy) error {
-	if strategy == nil {
-		return nil // nil strategy is valid (optional)
-	}
-
-	// Type switch to validate specific strategy types
-	switch s := strategy.(type) {
-	case *CascadingFailureStrategy:
-		return validateCascadingFailureStrategy(*s)
-	default:
-		return nil // Unknown strategy types are considered valid
-	}
-}
-
-func validateCascadingFailureStrategy(strategy CascadingFailureStrategy) error {
-	if len(strategy.VendorOrder) == 0 {
-		return &MockError{message: "vendor order cannot be empty"}
-	}
-	return nil
 }
 
 func validateDispatcherStats(stats *DispatcherStats) error {
