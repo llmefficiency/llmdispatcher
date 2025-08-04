@@ -12,8 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -47,45 +45,14 @@ jobs:
           echo "build_status=failing" >> $GITHUB_OUTPUT
         fi
     
-    - name: Update README badges
+    - name: Display results
       run: |
         COVERAGE=${{ steps.coverage.outputs.coverage }}
         LINT_STATUS=${{ steps.lint.outputs.lint_status }}
         BUILD_STATUS=${{ steps.build.outputs.build_status }}
         
-        echo "Updating badges with: Coverage=${COVERAGE}%, Lint=${LINT_STATUS}, Build=${BUILD_STATUS}"
-        
-        # Update coverage badge
-        sed -i "s|\[!\[Coverage\].*\]|\[!\[Coverage\]\(https://img.shields.io/badge/Coverage-${COVERAGE}%25-brightgreen\)\]|g" README.md
-        
-        # Update tests badge based on coverage
-        if [ "$COVERAGE" -gt 0 ]; then
-          sed -i "s|\[!\[Tests\].*\]|\[!\[Tests\]\(https://img.shields.io/badge/Tests-Passing-brightgreen\)\]|g" README.md
-        else
-          sed -i "s|\[!\[Tests\].*\]|\[!\[Tests\]\(https://img.shields.io/badge/Tests-Failing-red\)\]|g" README.md
-        fi
-        
-        # Update build badge
-        if [ "$BUILD_STATUS" = "passing" ]; then
-          sed -i "s|\[!\[Build Status\].*\]|\[!\[Build Status\]\(https://img.shields.io/badge/Build-Passing-brightgreen\)\]|g" README.md
-        else
-          sed -i "s|\[!\[Build Status\].*\]|\[!\[Build Status\]\(https://img.shields.io/badge/Build-Failing-red\)\]|g" README.md
-        fi
-        
-        # Update code quality badge
-        if [ "$LINT_STATUS" = "passing" ]; then
-          sed -i "s|\[!\[Code Quality\].*\]|\[!\[Code Quality\]\(https://img.shields.io/badge/Code%20Quality-A%2B-9cf\)\]|g" README.md
-        else
-          sed -i "s|\[!\[Code Quality\].*\]|\[!\[Code Quality\]\(https://img.shields.io/badge/Code%20Quality-Failing-red\)\]|g" README.md
-        fi
-        
-        # Only commit if we're on main branch and not in a PR
-        if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add README.md
-          git commit -m "Update badges: Coverage ${COVERAGE}%, Tests ${LINT_STATUS}, Build ${BUILD_STATUS}" || exit 0
-          git push
-        else
-          echo "Skipping commit - not on main branch or in PR"
-        fi 
+        echo "=== Test Results ==="
+        echo "Coverage: ${COVERAGE}%"
+        echo "Lint Status: ${LINT_STATUS}"
+        echo "Build Status: ${BUILD_STATUS}"
+        echo "===================" 
