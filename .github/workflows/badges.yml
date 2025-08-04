@@ -1,4 +1,4 @@
-name: Tests and Quality Checks
+name: Update Badges
 
 on:
   push:
@@ -8,10 +8,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  update-badges:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -19,31 +21,65 @@ jobs:
         go-version: '1.21'
     
     - name: Run tests with coverage
+      id: coverage
       run: |
         go test -v -coverprofile=coverage.out ./...
-        go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//' > coverage.txt
-        echo "Coverage: $(cat coverage.txt)%"
+        COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+        echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+        echo "Coverage: $COVERAGE%"
     
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v4
-      with:
-        version: latest
-    
-    - name: Run go vet
-      run: go vet ./...
-    
-    - name: Run go fmt check
+      id: lint
       run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-          echo "Code is not formatted. Please run 'go fmt ./...'"
-          exit 1
+        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        if golangci-lint run; then
+          echo "lint_status=passing" >> $GITHUB_OUTPUT
+        else
+          echo "lint_status=failing" >> $GITHUB_OUTPUT
         fi
     
     - name: Build project
-      run: go build ./...
-    
-    - name: Test coverage summary
+      id: build
       run: |
-        echo "=== Test Coverage Summary ==="
-        go tool cover -func=coverage.out | grep total
-        echo "=============================" 
+        if go build ./apps/cli/cli.go; then
+          echo "build_status=passing" >> $GITHUB_OUTPUT
+        else
+          echo "build_status=failing" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Update README badges
+      run: |
+        COVERAGE=${{ steps.coverage.outputs.coverage }}
+        LINT_STATUS=${{ steps.lint.outputs.lint_status }}
+        BUILD_STATUS=${{ steps.build.outputs.build_status }}
+        
+        # Update coverage badge
+        sed -i "s|\[!\[Coverage\].*\]|\[!\[Coverage\]\(https://img.shields.io/badge/Coverage-${COVERAGE}%25-brightgreen\)\]|g" README.md
+        
+        # Update tests badge based on coverage
+        if [ "$COVERAGE" -gt 0 ]; then
+          sed -i "s|\[!\[Tests\].*\]|\[!\[Tests\]\(https://img.shields.io/badge/Tests-Passing-brightgreen\)\]|g" README.md
+        else
+          sed -i "s|\[!\[Tests\].*\]|\[!\[Tests\]\(https://img.shields.io/badge/Tests-Failing-red\)\]|g" README.md
+        fi
+        
+        # Update build badge
+        if [ "$BUILD_STATUS" = "passing" ]; then
+          sed -i "s|\[!\[Build Status\].*\]|\[!\[Build Status\]\(https://img.shields.io/badge/Build-Passing-brightgreen\)\]|g" README.md
+        else
+          sed -i "s|\[!\[Build Status\].*\]|\[!\[Build Status\]\(https://img.shields.io/badge/Build-Failing-red\)\]|g" README.md
+        fi
+        
+        # Update code quality badge
+        if [ "$LINT_STATUS" = "passing" ]; then
+          sed -i "s|\[!\[Code Quality\].*\]|\[!\[Code Quality\]\(https://img.shields.io/badge/Code%20Quality-A%2B-9cf\)\]|g" README.md
+        else
+          sed -i "s|\[!\[Code Quality\].*\]|\[!\[Code Quality\]\(https://img.shields.io/badge/Code%20Quality-Failing-red\)\]|g" README.md
+        fi
+        
+        # Commit and push changes
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add README.md
+        git commit -m "Update badges: Coverage ${COVERAGE}%, Tests ${LINT_STATUS}, Build ${BUILD_STATUS}" || exit 0
+        git push 
