@@ -8,6 +8,24 @@ The `llmdispatcher` package provides a unified interface for dispatching LLM req
 import "github.com/llmefficiency/llmdispatcher/pkg/llmdispatcher"
 ```
 
+## Implementation Status
+
+**✅ Implemented Features:**
+- Basic vendor selection (default/fallback)
+- Simple routing rules (model pattern, max tokens, temperature)
+- Retry logic with configurable backoff strategies
+- All vendor integrations (OpenAI, Anthropic, Google, Azure, Local)
+- Streaming support
+- Basic statistics and metrics
+- Web service with REST API
+
+**❌ Not Yet Implemented:**
+- Cost optimization routing
+- Latency optimization routing
+- Advanced routing conditions (user ID, request type, content length)
+- Rate limiting
+- Advanced cost tracking
+
 ## Core Types
 
 ### Request
@@ -99,24 +117,24 @@ for {
     select {
     case content := <-streamingResp.ContentChan:
         fmt.Print(content)
-    case done := <-streamingResp.DoneChan:
-        if done {
-            break
-        }
+    case <-streamingResp.DoneChan:
+        fmt.Println("\n[Stream completed]")
+        return
     case err := <-streamingResp.ErrorChan:
-        return err
+        log.Printf("Streaming error: %v", err)
+        return
     }
 }
 ```
 
 ### Usage
 
-Token usage statistics.
+Represents token usage statistics.
 
 ```go
 type Usage struct {
     PromptTokens     int `json:"prompt_tokens"`     // Input tokens
-    CompletionTokens int `json:"completion_tokens"` // Generated tokens
+    CompletionTokens int `json:"completion_tokens"` // Output tokens
     TotalTokens      int `json:"total_tokens"`      // Total tokens
 }
 ```
@@ -136,6 +154,7 @@ type Config struct {
     Timeout              time.Duration       `json:"timeout,omitempty"`
     EnableLogging        bool                `json:"enable_logging"`
     EnableMetrics        bool                `json:"enable_metrics"`
+    // Note: CostOptimization and LatencyOptimization are defined but not yet implemented
     CostOptimization     *CostOptimization   `json:"cost_optimization,omitempty"`
     LatencyOptimization  *LatencyOptimization `json:"latency_optimization,omitempty"`
 }
@@ -177,15 +196,13 @@ type RetryPolicy struct {
     MaxRetries      int           `json:"max_retries"`
     BackoffStrategy BackoffStrategy `json:"backoff_strategy"`
     RetryableErrors []string      `json:"retryable_errors,omitempty"`
-    InitialDelay    time.Duration `json:"initial_delay,omitempty"`
-    MaxDelay        time.Duration `json:"max_delay,omitempty"`
 }
 ```
 
 **Backoff Strategies:**
 - `LinearBackoff`: Fixed delay between retries
 - `ExponentialBackoff`: Exponential delay increase
-- `JitterBackoff`: Exponential backoff with jitter
+- `FixedBackoff`: Fixed delay between retries
 
 ### RoutingRule
 
@@ -202,20 +219,25 @@ type RoutingRule struct {
 
 ### RoutingCondition
 
-Conditions for routing rule matching.
+Conditions for routing rule matching. **Currently implemented conditions:**
 
 ```go
 type RoutingCondition struct {
-    ModelPattern string `json:"model_pattern,omitempty"`
-    MaxTokens    int    `json:"max_tokens,omitempty"`
-    Temperature  float64 `json:"temperature,omitempty"`
-    User         string `json:"user,omitempty"`
+    ModelPattern string `json:"model_pattern,omitempty"` // ✅ Implemented: Exact model name matching
+    MaxTokens    int    `json:"max_tokens,omitempty"`   // ✅ Implemented: Token limit checking
+    Temperature  float64 `json:"temperature,omitempty"`  // ✅ Implemented: Temperature threshold
+    // ❌ Not yet implemented:
+    CostThreshold    float64       `json:"cost_threshold,omitempty"`
+    LatencyThreshold time.Duration `json:"latency_threshold,omitempty"`
+    UserID           string        `json:"user_id,omitempty"`
+    RequestType      string        `json:"request_type,omitempty"`
+    ContentLength    int           `json:"content_length,omitempty"`
 }
 ```
 
 ### CostOptimization
 
-Configures cost-based routing.
+**⚠️ Defined but not yet implemented**
 
 ```go
 type CostOptimization struct {
@@ -228,7 +250,7 @@ type CostOptimization struct {
 
 ### LatencyOptimization
 
-Configures latency-based routing.
+**⚠️ Defined but not yet implemented**
 
 ```go
 type LatencyOptimization struct {
@@ -280,7 +302,7 @@ Creates a new dispatcher with default configuration.
 dispatcher := llmdispatcher.New()
 ```
 
-#### NewWithConfig(config *Config)
+#### NewWithConfig(config)
 Creates a new dispatcher with custom configuration.
 
 ```go
@@ -293,8 +315,16 @@ dispatcher := llmdispatcher.NewWithConfig(config)
 
 ### Core Methods
 
-#### Send(ctx context.Context, req *Request) (*Response, error)
-Sends a request and returns the response.
+#### RegisterVendor(vendor)
+Registers a vendor with the dispatcher.
+
+```go
+openaiVendor := llmdispatcher.NewOpenAIVendor(openaiConfig)
+err := dispatcher.RegisterVendor(openaiVendor)
+```
+
+#### Send(ctx, request)
+Sends a request to the appropriate vendor.
 
 ```go
 response, err := dispatcher.Send(ctx, request)
@@ -304,8 +334,8 @@ if err != nil {
 fmt.Printf("Response: %s\n", response.Content)
 ```
 
-#### SendStreaming(ctx context.Context, req *Request) (*StreamingResponse, error)
-Sends a streaming request and returns a streaming response.
+#### SendStreaming(ctx, request)
+Sends a streaming request to the appropriate vendor.
 
 ```go
 streamingResp, err := dispatcher.SendStreaming(ctx, request)
@@ -318,280 +348,185 @@ for {
     select {
     case content := <-streamingResp.ContentChan:
         fmt.Print(content)
-    case done := <-streamingResp.DoneChan:
-        if done {
-            break
-        }
+    case <-streamingResp.DoneChan:
+        return
     case err := <-streamingResp.ErrorChan:
         return err
     }
 }
 ```
 
-### Vendor Management
-
-#### RegisterVendor(vendor Vendor) error
-Registers a vendor with the dispatcher.
+#### SendToVendor(ctx, vendorName, request)
+Sends a request to a specific vendor.
 
 ```go
-openaiVendor := llmdispatcher.NewOpenAIVendor(&llmdispatcher.VendorConfig{
-    APIKey: os.Getenv("OPENAI_API_KEY"),
-})
-err := dispatcher.RegisterVendor(openaiVendor)
-if err != nil {
-    return err
-}
+response, err := dispatcher.SendToVendor(ctx, "openai", request)
 ```
 
-#### GetVendors() []string
-Returns a list of registered vendor names.
-
-```go
-vendors := dispatcher.GetVendors()
-fmt.Printf("Registered vendors: %v\n", vendors)
-```
-
-#### GetVendor(name string) (Vendor, bool)
-Retrieves a specific vendor by name.
-
-```go
-vendor, exists := dispatcher.GetVendor("openai")
-if !exists {
-    return fmt.Errorf("vendor not found")
-}
-```
-
-### Statistics and Monitoring
-
-#### GetStats() *Stats
-Returns comprehensive dispatcher statistics.
+#### GetStats()
+Returns dispatcher statistics.
 
 ```go
 stats := dispatcher.GetStats()
 fmt.Printf("Total requests: %d\n", stats.TotalRequests)
-fmt.Printf("Success rate: %.2f%%\n", stats.SuccessRate())
-fmt.Printf("Average latency: %v\n", stats.AverageLatency)
-fmt.Printf("Total cost: $%.4f\n", stats.TotalCost)
+fmt.Printf("Success rate: %.2f%%\n", float64(stats.SuccessfulRequests)/float64(stats.TotalRequests)*100)
 ```
 
-## Vendor Factory Functions
-
-### OpenAI
-
-#### NewOpenAIVendor(config *VendorConfig) Vendor
-Creates an OpenAI vendor instance.
+#### GetVendors()
+Returns a list of registered vendor names.
 
 ```go
-openaiVendor := llmdispatcher.NewOpenAIVendor(&llmdispatcher.VendorConfig{
-    APIKey: os.Getenv("OPENAI_API_KEY"),
+vendors := dispatcher.GetVendors()
+fmt.Printf("Available vendors: %v\n", vendors)
+```
+
+## Vendor Implementations
+
+### OpenAI Vendor
+
+```go
+openaiConfig := &llmdispatcher.VendorConfig{
+    APIKey:  "sk-your-openai-api-key",
     BaseURL: "https://api.openai.com/v1",
     Timeout: 30 * time.Second,
-})
+}
+
+openaiVendor := llmdispatcher.NewOpenAIVendor(openaiConfig)
+dispatcher.RegisterVendor(openaiVendor)
 ```
 
-**Supported Models:**
-- `gpt-3.5-turbo`
-- `gpt-4`
-- `gpt-4-turbo`
-- `gpt-4o`
-
-### Anthropic
-
-#### NewAnthropicVendor(config *VendorConfig) Vendor
-Creates an Anthropic vendor instance.
+### Anthropic Vendor
 
 ```go
-anthropicVendor := llmdispatcher.NewAnthropicVendor(&llmdispatcher.VendorConfig{
-    APIKey: os.Getenv("ANTHROPIC_API_KEY"),
+anthropicConfig := &llmdispatcher.VendorConfig{
+    APIKey:  "sk-ant-your-anthropic-api-key",
+    BaseURL: "https://api.anthropic.com",
     Timeout: 30 * time.Second,
-})
+}
+
+anthropicVendor := llmdispatcher.NewAnthropicVendor(anthropicConfig)
+dispatcher.RegisterVendor(anthropicVendor)
 ```
 
-**Supported Models:**
-- `claude-3-opus`
-- `claude-3-sonnet`
-- `claude-3-haiku`
-- `claude-3-5-sonnet`
-- `claude-3-5-haiku`
-
-### Google
-
-#### NewGoogleVendor(config *VendorConfig) Vendor
-Creates a Google vendor instance.
+### Google Vendor
 
 ```go
-googleVendor := llmdispatcher.NewGoogleVendor(&llmdispatcher.VendorConfig{
-    APIKey: os.Getenv("GOOGLE_API_KEY"),
+googleConfig := &llmdispatcher.VendorConfig{
+    APIKey:  "your-google-api-key",
+    BaseURL: "https://generativelanguage.googleapis.com",
     Timeout: 30 * time.Second,
-})
+}
+
+googleVendor := llmdispatcher.NewGoogleVendor(googleConfig)
+dispatcher.RegisterVendor(googleVendor)
 ```
 
-**Supported Models:**
-- `gemini-1.5-pro`
-- `gemini-1.5-flash`
-- `gemini-pro`
-- `gemini-pro-vision`
-
-### Azure OpenAI
-
-#### NewAzureOpenAIVendor(config *VendorConfig) Vendor
-Creates an Azure OpenAI vendor instance.
+### Azure OpenAI Vendor
 
 ```go
-azureVendor := llmdispatcher.NewAzureOpenAIVendor(&llmdispatcher.VendorConfig{
-    APIKey: os.Getenv("AZURE_OPENAI_API_KEY"),
-    BaseURL: os.Getenv("AZURE_OPENAI_ENDPOINT"),
+azureConfig := &llmdispatcher.VendorConfig{
+    APIKey:  "your-azure-api-key",
+    BaseURL: "https://your-resource.openai.azure.com/",
     Timeout: 30 * time.Second,
-})
-```
-
-**Supported Models:**
-- `gpt-4`
-- `gpt-4-turbo`
-- `gpt-4o`
-- `gpt-35-turbo`
-- `gpt-35-turbo-16k`
-
-## Error Types
-
-### RateLimitError
-Error returned when rate limits are exceeded.
-
-```go
-type RateLimitError struct {
-    Vendor string
-    Err    error
 }
+
+azureVendor := llmdispatcher.NewAzureOpenAIVendor(azureConfig)
+dispatcher.RegisterVendor(azureVendor)
 ```
 
-### AuthenticationError
-Error returned for authentication failures.
+### Local Vendor (Ollama)
 
 ```go
-type AuthenticationError struct {
-    Vendor string
-    Err    error
+localConfig := &llmdispatcher.VendorConfig{
+    APIKey: "dummy", // Not used for local vendor
+    Headers: map[string]string{
+        "server_url": "http://localhost:11434",
+        "model_path": "llama2:7b",
+    },
+    Timeout: 60 * time.Second,
 }
+
+localVendor := llmdispatcher.NewLocalVendor(localConfig)
+dispatcher.RegisterVendor(localVendor)
 ```
 
-### TimeoutError
-Error returned when requests timeout.
+## Error Handling
+
+The dispatcher provides comprehensive error handling:
 
 ```go
-type TimeoutError struct {
-    Vendor string
-    Err    error
-}
-```
-
-### VendorUnavailableError
-Error returned when a vendor is unavailable.
-
-```go
-type VendorUnavailableError struct {
-    Vendor string
-    Err    error
-}
-```
-
-## Statistics Types
-
-### Stats
-Comprehensive dispatcher statistics.
-
-```go
-type Stats struct {
-    TotalRequests    int64                    `json:"total_requests"`
-    SuccessfulRequests int64                  `json:"successful_requests"`
-    FailedRequests   int64                    `json:"failed_requests"`
-    AverageLatency   time.Duration           `json:"average_latency"`
-    TotalCost        float64                  `json:"total_cost"`
-    AverageCost      float64                  `json:"average_cost"`
-    VendorStats      map[string]*VendorStats `json:"vendor_stats"`
-}
-```
-
-### VendorStats
-Statistics for individual vendors.
-
-```go
-type VendorStats struct {
-    Requests   int64         `json:"requests"`
-    Successes  int64         `json:"successes"`
-    Failures   int64         `json:"failures"`
-    TotalCost  float64       `json:"total_cost"`
-    AvgLatency time.Duration `json:"avg_latency"`
-}
-```
-
-## Complete Example
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "log"
-    "os"
-    "time"
-
-    "github.com/llmefficiency/llmdispatcher/pkg/llmdispatcher"
-)
-
-func main() {
-    // Create dispatcher with configuration
-    config := &llmdispatcher.Config{
-        DefaultVendor: "openai",
-        FallbackVendor: "anthropic",
-        Timeout: 30 * time.Second,
-        EnableLogging: true,
-        RetryPolicy: &llmdispatcher.RetryPolicy{
-            MaxRetries: 3,
-            BackoffStrategy: llmdispatcher.ExponentialBackoff,
-        },
+response, err := dispatcher.Send(ctx, request)
+if err != nil {
+    switch {
+    case errors.Is(err, llmdispatcher.ErrNoVendorsRegistered):
+        log.Fatal("No vendors registered")
+    case errors.Is(err, llmdispatcher.ErrVendorUnavailable):
+        log.Printf("All vendors unavailable")
+    case errors.Is(err, llmdispatcher.ErrInvalidRequest):
+        log.Printf("Invalid request: %v", err)
+    default:
+        log.Printf("Unexpected error: %v", err)
     }
-    
-    dispatcher := llmdispatcher.NewWithConfig(config)
-
-    // Register vendors
-    openaiVendor := llmdispatcher.NewOpenAIVendor(&llmdispatcher.VendorConfig{
-        APIKey: os.Getenv("OPENAI_API_KEY"),
-    })
-    dispatcher.RegisterVendor(openaiVendor)
-
-    anthropicVendor := llmdispatcher.NewAnthropicVendor(&llmdispatcher.VendorConfig{
-        APIKey: os.Getenv("ANTHROPIC_API_KEY"),
-    })
-    dispatcher.RegisterVendor(anthropicVendor)
-
-    // Create request
-    request := &llmdispatcher.Request{
-        Model: "gpt-3.5-turbo",
-        Messages: []llmdispatcher.Message{
-            {Role: "user", Content: "Hello, how are you?"},
-        },
-        Temperature: 0.7,
-        MaxTokens: 1000,
-    }
-
-    // Send request
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-
-    response, err := dispatcher.Send(ctx, request)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    fmt.Printf("Response: %s\n", response.Content)
-    fmt.Printf("Model: %s\n", response.Model)
-    fmt.Printf("Vendor: %s\n", response.Vendor)
-    fmt.Printf("Usage: %+v\n", response.Usage)
-
-    // Get statistics
-    stats := dispatcher.GetStats()
-    fmt.Printf("Total requests: %d\n", stats.TotalRequests)
-    fmt.Printf("Success rate: %.2f%%\n", stats.SuccessRate())
+    return
 }
+```
+
+## Web Service API
+
+The dispatcher includes a web service with REST API endpoints:
+
+### Health Check
+```bash
+GET /api/v1/health
+```
+
+### Chat Completions
+```bash
+POST /api/v1/chat/completions
+```
+
+### Streaming Chat
+```bash
+POST /api/v1/chat/completions/stream
+```
+
+### Vendor Testing
+```bash
+POST /api/v1/test/vendor
+```
+
+### Statistics
+```bash
+GET /api/v1/stats
+```
+
+### Vendors List
+```bash
+GET /api/v1/vendors
+```
+
+## Environment Variables
+
+Configure vendors using environment variables:
+
+```bash
+# OpenAI
+OPENAI_API_KEY=sk-your-openai-api-key
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_TIMEOUT=30s
+
+# Anthropic
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+ANTHROPIC_TIMEOUT=30s
+
+# Google
+GOOGLE_API_KEY=your-google-api-key
+GOOGLE_BASE_URL=https://generativelanguage.googleapis.com
+GOOGLE_TIMEOUT=30s
+
+# Azure OpenAI
+AZURE_OPENAI_API_KEY=your-azure-api-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_TIMEOUT=30s
 ``` 

@@ -2,32 +2,50 @@
 
 This document provides comprehensive examples of how to use the LLM Dispatcher.
 
+## Implementation Status
+
+**✅ Implemented Features:**
+- Basic vendor selection (default/fallback)
+- Simple routing rules (model pattern, max tokens, temperature)
+- Retry logic with configurable backoff strategies
+- All vendor integrations (OpenAI, Anthropic, Google, Azure, Local)
+- Streaming support
+- Basic statistics and metrics
+- Web service with REST API
+
+**❌ Not Yet Implemented:**
+- Cost optimization routing
+- Latency optimization routing
+- Advanced routing conditions (user ID, request type, content length)
+- Rate limiting
+- Advanced cost tracking
+
 ## CLI Usage
 
-The example application (`cmd/example/cli.go`) provides a command-line interface for testing different configurations:
+The CLI application (`apps/cli/cli.go`) provides a command-line interface for testing different configurations:
 
 ### Basic CLI Commands
 
 ```bash
 # Run with all available vendors (default mode)
-go run cmd/example/cli.go
+go run apps/cli/cli.go
 
 # Vendor mode with default vendor (openai)
-go run cmd/example/cli.go --vendor
+go run apps/cli/cli.go --vendor
 
 # Vendor mode with specific vendor override
-go run cmd/example/cli.go --vendor --vendor-override anthropic
-go run cmd/example/cli.go --vendor --vendor-override openai
+go run apps/cli/cli.go --vendor --vendor-override anthropic
+go run apps/cli/cli.go --vendor --vendor-override openai
 
 # Local mode with Ollama
-go run cmd/example/cli.go --local
+go run apps/cli/cli.go --local
 
 # Local mode with custom model
-go run cmd/example/cli.go --local --model llama2:13b
-go run cmd/example/cli.go --local --model mistral:7b
+go run apps/cli/cli.go --local --model llama2:13b
+go run apps/cli/cli.go --local --model mistral:7b
 
 # Local mode with custom server
-go run cmd/example/cli.go --local --server http://localhost:11434
+go run apps/cli/cli.go --local --server http://localhost:11434
 ```
 
 ### CLI Options
@@ -44,7 +62,7 @@ go run cmd/example/cli.go --local --server http://localhost:11434
 
 ```bash
 # Copy environment template
-cp cmd/example/env.example .env
+cp env.example .env
 
 # Edit .env with your API keys
 export OPENAI_API_KEY="sk-your-openai-key"
@@ -99,7 +117,7 @@ func main() {
             {Role: "user", Content: "Hello, how are you?"},
         },
         Temperature: 0.7,
-        MaxTokens:   100,
+        MaxTokens:   1000,
     }
 
     resp, err := dispatcher.Send(ctx, req)
@@ -108,42 +126,71 @@ func main() {
     }
 
     fmt.Printf("Response: %s\n", resp.Content)
+    fmt.Printf("Vendor: %s\n", resp.Vendor)
+    fmt.Printf("Usage: %+v\n", resp.Usage)
 }
 ```
 
-## Advanced Configuration
-
-### Cost Optimization
+### Multi-Vendor Setup
 
 ```go
+// Create dispatcher with fallback configuration
+config := &llmdispatcher.Config{
+    DefaultVendor:  "openai",
+    FallbackVendor: "anthropic",
+    Timeout:        30 * time.Second,
+    EnableLogging:  true,
+    RetryPolicy: &llmdispatcher.RetryPolicy{
+        MaxRetries:      3,
+        BackoffStrategy: llmdispatcher.ExponentialBackoff,
+        RetryableErrors: []string{"rate_limit", "timeout"},
+    },
+}
+
+dispatcher := llmdispatcher.NewWithConfig(config)
+
+// Register multiple vendors
+openaiConfig := &llmdispatcher.VendorConfig{
+    APIKey:  "your-openai-api-key",
+    Timeout: 30 * time.Second,
+}
+openaiVendor := llmdispatcher.NewOpenAIVendor(openaiConfig)
+dispatcher.RegisterVendor(openaiVendor)
+
+anthropicConfig := &llmdispatcher.VendorConfig{
+    APIKey:  "your-anthropic-api-key",
+    Timeout: 30 * time.Second,
+}
+anthropicVendor := llmdispatcher.NewAnthropicVendor(anthropicConfig)
+dispatcher.RegisterVendor(anthropicVendor)
+
+// Send request - will use OpenAI by default, fallback to Anthropic if needed
+resp, err := dispatcher.Send(ctx, req)
+if err != nil {
+    log.Fatalf("Failed to send request: %v", err)
+}
+
+fmt.Printf("Response from %s: %s\n", resp.Vendor, resp.Content)
+```
+
+## Routing Rules
+
+### Basic Routing Rules
+
+**⚠️ Note: Only basic routing conditions are currently implemented**
+
+```go
+// Create dispatcher with routing rules
 config := &llmdispatcher.Config{
     DefaultVendor: "openai",
     Timeout:       30 * time.Second,
     EnableLogging: true,
-    CostOptimization: &llmdispatcher.CostOptimization{
-        Enabled:     true,
-        MaxCost:     0.10, // $0.10 per request
-        PreferCheap: true,
-        VendorCosts: map[string]float64{
-            "openai":   0.0020, // $0.002 per 1K tokens
-            "anthropic": 0.0015, // $0.0015 per 1K tokens
-            "google":   0.0010, // $0.001 per 1K tokens
-            "local":    0.0001, // $0.0001 per 1K tokens (cheapest)
-        },
-    },
-}
-```
-
-### Routing Rules
-
-```go
-config := &llmdispatcher.Config{
-    DefaultVendor: "openai",
     RoutingRules: []llmdispatcher.RoutingRule{
         {
             Condition: llmdispatcher.RoutingCondition{
-                ModelPattern: "gpt-4",
-                MaxTokens:    1000,
+                ModelPattern: "gpt-4",     // ✅ Implemented: Exact model matching
+                MaxTokens:    2000,         // ✅ Implemented: Token limit checking
+                Temperature:  0.8,          // ✅ Implemented: Temperature threshold
             },
             Vendor:   "openai",
             Priority: 1,
@@ -151,50 +198,102 @@ config := &llmdispatcher.Config{
         },
         {
             Condition: llmdispatcher.RoutingCondition{
-                ModelPattern: "claude",
-                CostThreshold: 0.05,
+                ModelPattern: "claude-3",   // Route Claude models to Anthropic
+                MaxTokens:    1000,
             },
             Vendor:   "anthropic",
             Priority: 2,
             Enabled:  true,
         },
-        {
-            Condition: llmdispatcher.RoutingCondition{
-                ModelPattern: "llama",
-                CostThreshold: 0.01,
-            },
-            Vendor:   "local",
-            Priority: 3,
-            Enabled:  true,
-        },
     },
 }
+
+dispatcher := llmdispatcher.NewWithConfig(config)
+
+// Register vendors
+openaiVendor := llmdispatcher.NewOpenAIVendor(openaiConfig)
+dispatcher.RegisterVendor(openaiVendor)
+
+anthropicVendor := llmdispatcher.NewAnthropicVendor(anthropicConfig)
+dispatcher.RegisterVendor(anthropicVendor)
+
+// Send requests - will be routed based on rules
+req1 := &llmdispatcher.Request{
+    Model: "gpt-4",
+    Messages: []llmdispatcher.Message{
+        {Role: "user", Content: "Complex analysis request"},
+    },
+    MaxTokens:   1500,
+    Temperature: 0.7,
+}
+
+req2 := &llmdispatcher.Request{
+    Model: "claude-3-sonnet",
+    Messages: []llmdispatcher.Message{
+        {Role: "user", Content: "Simple question"},
+    },
+    MaxTokens: 500,
+}
+
+resp1, _ := dispatcher.Send(ctx, req1) // Will use OpenAI
+resp2, _ := dispatcher.Send(ctx, req2) // Will use Anthropic
+
+fmt.Printf("Request 1 vendor: %s\n", resp1.Vendor)
+fmt.Printf("Request 2 vendor: %s\n", resp2.Vendor)
 ```
 
-## Local Model Integration
+### Advanced Routing Rules (Not Yet Implemented)
 
-The local vendor allows you to use local models like Ollama or llama.cpp as the cheapest option in your dispatcher.
+**❌ The following routing conditions are defined but not yet implemented:**
 
-### Ollama Setup (Recommended)
+```go
+// These conditions exist in the config but are not used in routing logic
+Condition: llmdispatcher.RoutingCondition{
+    CostThreshold:    0.10,              // ❌ Not implemented
+    LatencyThreshold: 30 * time.Second,  // ❌ Not implemented
+    UserID:           "premium_user",     // ❌ Not implemented
+    RequestType:      "analysis",         // ❌ Not implemented
+    ContentLength:    1000,               // ❌ Not implemented
+},
+```
+
+## Local Vendor Integration
+
+### Ollama Integration
 
 ```go
 // Configure local vendor with Ollama
 localConfig := &llmdispatcher.VendorConfig{
-    APIKey: "dummy", // Not used for local models
+    APIKey: "dummy", // Not used for local vendor
     Headers: map[string]string{
-        "server_url": "http://localhost:11434", // Ollama default
-        "model_path": "llama2:7b",             // Model name in Ollama
+        "server_url": "http://localhost:11434",
+        "model_path": "llama2:7b",
     },
     Timeout: 60 * time.Second,
 }
 
 localVendor := llmdispatcher.NewLocalVendor(localConfig)
-if err := dispatcher.RegisterVendor(localVendor); err != nil {
-    log.Fatalf("Failed to register local vendor: %v", err)
+dispatcher.RegisterVendor(localVendor)
+
+// Send request to local model
+req := &llmdispatcher.Request{
+    Model: "llama2:7b",
+    Messages: []llmdispatcher.Message{
+        {Role: "user", Content: "What is the capital of France?"},
+    },
+    Temperature: 0.7,
+    MaxTokens:   100,
 }
+
+resp, err := dispatcher.Send(ctx, req)
+if err != nil {
+    log.Fatalf("Failed to send request: %v", err)
+}
+
+fmt.Printf("Local response: %s\n", resp.Content)
 ```
 
-### llama.cpp Setup (Maximum Performance)
+### Direct llama.cpp Integration
 
 ```go
 // Configure local vendor with llama.cpp
@@ -208,9 +307,7 @@ localConfig := &llmdispatcher.VendorConfig{
 }
 
 localVendor := llmdispatcher.NewLocalVendor(localConfig)
-if err := dispatcher.RegisterVendor(localVendor); err != nil {
-    log.Fatalf("Failed to register local vendor: %v", err)
-}
+dispatcher.RegisterVendor(localVendor)
 ```
 
 ### Custom HTTP Server Setup
@@ -227,9 +324,7 @@ localConfig := &llmdispatcher.VendorConfig{
 }
 
 localVendor := llmdispatcher.NewLocalVendor(localConfig)
-if err := dispatcher.RegisterVendor(localVendor); err != nil {
-    log.Fatalf("Failed to register local vendor: %v", err)
-}
+dispatcher.RegisterVendor(localVendor)
 ```
 
 ### GPU-Optimized Setup
@@ -248,15 +343,15 @@ localConfig := &llmdispatcher.VendorConfig{
 }
 
 localVendor := llmdispatcher.NewLocalVendor(localConfig)
-if err := dispatcher.RegisterVendor(localVendor); err != nil {
-    log.Fatalf("Failed to register local vendor: %v", err)
-}
+dispatcher.RegisterVendor(localVendor)
 ```
 
-### Using Local Models with Cost Optimization
+## Cost Optimization (Not Yet Implemented)
+
+**⚠️ Cost optimization is defined in configuration but not yet implemented in routing logic**
 
 ```go
-// Create dispatcher with local model as cheapest option
+// This configuration exists but is not used in vendor selection
 config := &llmdispatcher.Config{
     DefaultVendor: "local",
     Timeout:       60 * time.Second,
@@ -273,40 +368,7 @@ config := &llmdispatcher.Config{
     },
 }
 
-dispatcher := llmdispatcher.NewWithConfig(config)
-
-// Register local vendor
-localConfig := &llmdispatcher.VendorConfig{
-    APIKey: "dummy",
-    Headers: map[string]string{
-        "server_url": "http://localhost:11434",
-        "model_path": "llama2:7b",
-    },
-    Timeout: 60 * time.Second,
-}
-
-localVendor := llmdispatcher.NewLocalVendor(localConfig)
-if err := dispatcher.RegisterVendor(localVendor); err != nil {
-    log.Fatalf("Failed to register local vendor: %v", err)
-}
-
-// Send request - will automatically use local model due to cost optimization
-ctx := context.Background()
-req := &llmdispatcher.Request{
-    Model: "llama2:7b",
-    Messages: []llmdispatcher.Message{
-        {Role: "user", Content: "What is the capital of France?"},
-    },
-    Temperature: 0.7,
-    MaxTokens:   100,
-}
-
-resp, err := dispatcher.Send(ctx, req)
-if err != nil {
-    log.Fatalf("Failed to send request: %v", err)
-}
-
-fmt.Printf("Response from %s: %s\n", resp.Vendor, resp.Content)
+// Note: This configuration is currently ignored by the routing logic
 ```
 
 ## Streaming
@@ -348,10 +410,10 @@ for {
 req := &llmdispatcher.Request{
     Model: "llama2:7b",
     Messages: []llmdispatcher.Message{
-        {Role: "user", Content: "Write a poem about AI."},
+        {Role: "user", Content: "Explain quantum computing in simple terms."},
     },
-    Temperature: 0.8,
-    MaxTokens:   200,
+    Temperature: 0.7,
+    MaxTokens:   300,
 }
 
 streamResp, err := dispatcher.SendStreaming(ctx, req)
@@ -359,16 +421,16 @@ if err != nil {
     log.Fatalf("Failed to start streaming: %v", err)
 }
 
-fmt.Print("Streaming response: ")
+fmt.Print("Response: ")
 for {
     select {
     case content := <-streamResp.ContentChan:
         fmt.Print(content)
     case <-streamResp.DoneChan:
-        fmt.Println("\n[Stream completed]")
+        fmt.Println("\n[Local streaming completed]")
         return
     case err := <-streamResp.ErrorChan:
-        log.Printf("Streaming error: %v", err)
+        log.Printf("Local streaming error: %v", err)
         return
     }
 }
@@ -376,89 +438,179 @@ for {
 
 ## Error Handling
 
-### Retry Policy
+### Comprehensive Error Handling
 
 ```go
+resp, err := dispatcher.Send(ctx, req)
+if err != nil {
+    switch {
+    case errors.Is(err, llmdispatcher.ErrNoVendorsRegistered):
+        log.Fatal("No vendors registered with dispatcher")
+    case errors.Is(err, llmdispatcher.ErrVendorUnavailable):
+        log.Printf("All vendors are currently unavailable")
+    case errors.Is(err, llmdispatcher.ErrInvalidRequest):
+        log.Printf("Invalid request: %v", err)
+    default:
+        log.Printf("Unexpected error: %v", err)
+    }
+    return
+}
+```
+
+### Retry Logic
+
+```go
+// Configure retry policy
 config := &llmdispatcher.Config{
     DefaultVendor: "openai",
     RetryPolicy: &llmdispatcher.RetryPolicy{
         MaxRetries:      3,
         BackoffStrategy: llmdispatcher.ExponentialBackoff,
-        RetryableErrors: []string{
-            "rate limit exceeded",
-            "timeout",
-            "server error",
-        },
+        RetryableErrors: []string{"rate_limit", "timeout", "network_error"},
     },
-}
-```
-
-### Fallback Strategy
-
-```go
-config := &llmdispatcher.Config{
-    DefaultVendor:  "openai",
-    FallbackVendor: "anthropic",
-    RoutingRules: []llmdispatcher.RoutingRule{
-        {
-            Condition: llmdispatcher.RoutingCondition{
-                ModelPattern: "gpt-4",
-            },
-            Vendor:   "openai",
-            Priority: 1,
-            Enabled:  true,
-        },
-        {
-            Condition: llmdispatcher.RoutingCondition{
-                ModelPattern: "claude",
-            },
-            Vendor:   "anthropic",
-            Priority: 2,
-            Enabled:  true,
-        },
-    },
-}
-```
-
-## Metrics and Monitoring
-
-### Basic Metrics
-
-```go
-config := &llmdispatcher.Config{
-    DefaultVendor: "openai",
-    EnableMetrics: true,
-    EnableLogging: true,
 }
 
 dispatcher := llmdispatcher.NewWithConfig(config)
 
-// After sending requests, get statistics
+// Send request with automatic retries
+resp, err := dispatcher.Send(ctx, req)
+if err != nil {
+    log.Printf("Request failed after retries: %v", err)
+    return
+}
+```
+
+## Statistics and Monitoring
+
+### Basic Statistics
+
+```go
+// Get dispatcher statistics
 stats := dispatcher.GetStats()
+
 fmt.Printf("Total requests: %d\n", stats.TotalRequests)
 fmt.Printf("Successful requests: %d\n", stats.SuccessfulRequests)
 fmt.Printf("Failed requests: %d\n", stats.FailedRequests)
-fmt.Printf("Average latency: %v\n", stats.AverageLatency)
-fmt.Printf("Total cost: $%.4f\n", stats.TotalCost)
+fmt.Printf("Success rate: %.2f%%\n", 
+    float64(stats.SuccessfulRequests)/float64(stats.TotalRequests)*100)
+
+// Vendor-specific statistics
+for vendorName, vendorStats := range stats.VendorStats {
+    fmt.Printf("%s: %d requests, %d successes, %d failures\n",
+        vendorName, vendorStats.Requests, vendorStats.Successes, vendorStats.Failures)
+}
 ```
 
-### Vendor-Specific Metrics
+### Vendor Availability
 
 ```go
-stats := dispatcher.GetStats()
-for vendor, vendorStats := range stats.VendorStats {
-    fmt.Printf("Vendor %s:\n", vendor)
-    fmt.Printf("  Requests: %d\n", vendorStats.Requests)
-    fmt.Printf("  Successes: %d\n", vendorStats.Successes)
-    fmt.Printf("  Failures: %d\n", vendorStats.Failures)
-    fmt.Printf("  Average latency: %v\n", vendorStats.AverageLatency)
-    fmt.Printf("  Total cost: $%.4f\n", vendorStats.TotalCost)
+// Check vendor availability
+vendors := dispatcher.GetVendors()
+for _, vendorName := range vendors {
+    vendor, exists := dispatcher.GetVendor(vendorName)
+    if !exists {
+        continue
+    }
+    
+    if vendor.IsAvailable(ctx) {
+        fmt.Printf("%s: Available\n", vendorName)
+    } else {
+        fmt.Printf("%s: Unavailable\n", vendorName)
+    }
+}
+```
+
+## Web Service Usage
+
+### Start Web Service
+
+```bash
+# Start the web service
+make webservice
+
+# Or run directly
+go run apps/server/main.go
+```
+
+### API Examples
+
+```bash
+# Health check
+curl http://localhost:8080/api/v1/health
+
+# Get statistics
+curl http://localhost:8080/api/v1/stats
+
+# Get vendors list
+curl http://localhost:8080/api/v1/vendors
+
+# Send chat completion
+curl -X POST http://localhost:8080/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-3.5-turbo",
+    "messages": [
+      {"role": "user", "content": "Hello, how are you?"}
+    ],
+    "temperature": 0.7,
+    "max_tokens": 100
+  }'
+
+# Test specific vendor
+curl -X POST http://localhost:8080/api/v1/test/vendor \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vendor": "openai",
+    "model": "gpt-3.5-turbo",
+    "messages": [
+      {"role": "user", "content": "Test message"}
+    ]
+  }'
+```
+
+## Environment Configuration
+
+### Environment Variables
+
+```bash
+# Copy template
+cp env.example .env
+
+# Edit with your API keys
+OPENAI_API_KEY=sk-your-openai-api-key-here
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key-here
+GOOGLE_API_KEY=your-google-api-key-here
+AZURE_OPENAI_API_KEY=your-azure-openai-api-key-here
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+
+# Optional: Rate limiting (not yet implemented)
+OPENAI_RATE_LIMIT_REQUESTS_PER_MINUTE=60
+ANTHROPIC_RATE_LIMIT_REQUESTS_PER_MINUTE=50
+```
+
+### Programmatic Configuration
+
+```go
+// Load environment variables
+if err := godotenv.Load(); err != nil {
+    log.Printf("No .env file found")
+}
+
+// Create vendor configs from environment
+openaiConfig := &llmdispatcher.VendorConfig{
+    APIKey:  os.Getenv("OPENAI_API_KEY"),
+    BaseURL: os.Getenv("OPENAI_BASE_URL"),
+    Timeout: 30 * time.Second,
+}
+
+anthropicConfig := &llmdispatcher.VendorConfig{
+    APIKey:  os.Getenv("ANTHROPIC_API_KEY"),
+    BaseURL: os.Getenv("ANTHROPIC_BASE_URL"),
+    Timeout: 30 * time.Second,
 }
 ```
 
 ## Complete Example
-
-Here's a complete example that demonstrates all the features:
 
 ```go
 package main
@@ -474,152 +626,59 @@ import (
 )
 
 func main() {
-    // Get API keys from environment
-    openaiAPIKey := os.Getenv("OPENAI_API_KEY")
-    anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
-
-    // Create dispatcher with advanced configuration
+    // Create dispatcher with configuration
     config := &llmdispatcher.Config{
-        DefaultVendor:  "local",
-        FallbackVendor: "openai",
-        Timeout:        60 * time.Second,
+        DefaultVendor:  "openai",
+        FallbackVendor: "anthropic",
+        Timeout:        30 * time.Second,
         EnableLogging:  true,
-        EnableMetrics:  true,
-        CostOptimization: &llmdispatcher.CostOptimization{
-            Enabled:     true,
-            PreferCheap: true,
-            VendorCosts: map[string]float64{
-                "local":    0.0001,
-                "openai":   0.0020,
-                "anthropic": 0.0015,
-            },
-        },
         RetryPolicy: &llmdispatcher.RetryPolicy{
             MaxRetries:      3,
             BackoffStrategy: llmdispatcher.ExponentialBackoff,
-            RetryableErrors: []string{"rate limit exceeded", "timeout"},
-        },
-        RoutingRules: []llmdispatcher.RoutingRule{
-            {
-                Condition: llmdispatcher.RoutingCondition{
-                    ModelPattern: "gpt-4",
-                },
-                Vendor:   "openai",
-                Priority: 1,
-                Enabled:  true,
-            },
-            {
-                Condition: llmdispatcher.RoutingCondition{
-                    ModelPattern: "claude",
-                },
-                Vendor:   "anthropic",
-                Priority: 2,
-                Enabled:  true,
-            },
-            {
-                Condition: llmdispatcher.RoutingCondition{
-                    ModelPattern: "llama",
-                },
-                Vendor:   "local",
-                Priority: 3,
-                Enabled:  true,
-            },
         },
     }
-
+    
     dispatcher := llmdispatcher.NewWithConfig(config)
 
-    // Register local vendor (cheapest option)
-    localConfig := &llmdispatcher.VendorConfig{
-        APIKey: "dummy",
-        Headers: map[string]string{
-            "server_url": "http://localhost:11434",
-            "model_path": "llama2:7b",
+    // Register vendors
+    openaiVendor := llmdispatcher.NewOpenAIVendor(&llmdispatcher.VendorConfig{
+        APIKey: os.Getenv("OPENAI_API_KEY"),
+    })
+    dispatcher.RegisterVendor(openaiVendor)
+
+    anthropicVendor := llmdispatcher.NewAnthropicVendor(&llmdispatcher.VendorConfig{
+        APIKey: os.Getenv("ANTHROPIC_API_KEY"),
+    })
+    dispatcher.RegisterVendor(anthropicVendor)
+
+    // Create request
+    request := &llmdispatcher.Request{
+        Model: "gpt-3.5-turbo",
+        Messages: []llmdispatcher.Message{
+            {Role: "user", Content: "Hello, how are you?"},
         },
-        Timeout: 60 * time.Second,
+        Temperature: 0.7,
+        MaxTokens:   1000,
     }
 
-    localVendor := llmdispatcher.NewLocalVendor(localConfig)
-    if err := dispatcher.RegisterVendor(localVendor); err != nil {
-        log.Printf("Failed to register local vendor: %v", err)
+    // Send request
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    response, err := dispatcher.Send(ctx, request)
+    if err != nil {
+        log.Fatal(err)
     }
 
-    // Register OpenAI vendor
-    if openaiAPIKey != "" {
-        openaiConfig := &llmdispatcher.VendorConfig{
-            APIKey:  openaiAPIKey,
-            Timeout: 30 * time.Second,
-        }
+    fmt.Printf("Response: %s\n", response.Content)
+    fmt.Printf("Model: %s\n", response.Model)
+    fmt.Printf("Vendor: %s\n", response.Vendor)
+    fmt.Printf("Usage: %+v\n", response.Usage)
 
-        openaiVendor := llmdispatcher.NewOpenAIVendor(openaiConfig)
-        if err := dispatcher.RegisterVendor(openaiVendor); err != nil {
-            log.Printf("Failed to register OpenAI vendor: %v", err)
-        }
-    }
-
-    // Register Anthropic vendor
-    if anthropicAPIKey != "" {
-        anthropicConfig := &llmdispatcher.VendorConfig{
-            APIKey:  anthropicAPIKey,
-            Timeout: 30 * time.Second,
-        }
-
-        anthropicVendor := llmdispatcher.NewAnthropicVendor(anthropicConfig)
-        if err := dispatcher.RegisterVendor(anthropicVendor); err != nil {
-            log.Printf("Failed to register Anthropic vendor: %v", err)
-        }
-    }
-
-    // Send requests
-    ctx := context.Background()
-    requests := []llmdispatcher.Request{
-        {
-            Model: "llama2:7b",
-            Messages: []llmdispatcher.Message{
-                {Role: "user", Content: "What is the capital of France?"},
-            },
-            Temperature: 0.7,
-            MaxTokens:   100,
-        },
-        {
-            Model: "gpt-4",
-            Messages: []llmdispatcher.Message{
-                {Role: "user", Content: "Explain quantum computing."},
-            },
-            Temperature: 0.8,
-            MaxTokens:   200,
-        },
-    }
-
-    for i, req := range requests {
-        fmt.Printf("\nRequest %d:\n", i+1)
-        resp, err := dispatcher.Send(ctx, &req)
-        if err != nil {
-            log.Printf("Request %d failed: %v", i+1, err)
-            continue
-        }
-
-        fmt.Printf("Vendor: %s\n", resp.Vendor)
-        fmt.Printf("Model: %s\n", resp.Model)
-        fmt.Printf("Response: %s\n", resp.Content)
-        fmt.Printf("Usage: %+v\n", resp.Usage)
-    }
-
-    // Print final statistics
+    // Get statistics
     stats := dispatcher.GetStats()
-    fmt.Printf("\nFinal Statistics:\n")
     fmt.Printf("Total requests: %d\n", stats.TotalRequests)
-    fmt.Printf("Successful requests: %d\n", stats.SuccessfulRequests)
-    fmt.Printf("Failed requests: %d\n", stats.FailedRequests)
-    fmt.Printf("Average latency: %v\n", stats.AverageLatency)
-    fmt.Printf("Total cost: $%.4f\n", stats.TotalCost)
+    fmt.Printf("Success rate: %.2f%%\n", 
+        float64(stats.SuccessfulRequests)/float64(stats.TotalRequests)*100)
 }
-```
-
-This example demonstrates:
-- Local model integration as the cheapest option
-- Cost optimization with multiple vendors
-- Routing rules for different models
-- Retry policies and error handling
-- Metrics and monitoring
-- Fallback strategies 
+``` 
