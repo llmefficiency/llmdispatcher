@@ -1258,7 +1258,7 @@ func TestDispatcher_UpdateStats(t *testing.T) {
 	}
 
 	// Test successful request
-	dispatcher.updateStats(true, "test-vendor", 100*time.Millisecond)
+	dispatcher.updateStats(true, "test-vendor", 100*time.Millisecond, 0.05)
 
 	if dispatcher.stats.SuccessfulRequests != 1 {
 		t.Errorf("Expected 1 successful request, got: %d", dispatcher.stats.SuccessfulRequests)
@@ -1269,7 +1269,7 @@ func TestDispatcher_UpdateStats(t *testing.T) {
 	}
 
 	// Test failed request
-	dispatcher.updateStats(false, "test-vendor", 200*time.Millisecond)
+	dispatcher.updateStats(false, "test-vendor", 200*time.Millisecond, 0.0)
 
 	if dispatcher.stats.FailedRequests != 1 {
 		t.Errorf("Expected 1 failed request, got: %d", dispatcher.stats.FailedRequests)
@@ -1302,7 +1302,7 @@ func TestDispatcher_UpdateStats_NoVendor(t *testing.T) {
 	}
 
 	// Test without vendor name
-	dispatcher.updateStats(true, "", 100*time.Millisecond)
+	dispatcher.updateStats(true, "", 100*time.Millisecond, 0.0)
 
 	if dispatcher.stats.SuccessfulRequests != 1 {
 		t.Errorf("Expected 1 successful request, got: %d", dispatcher.stats.SuccessfulRequests)

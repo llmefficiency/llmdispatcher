@@ -73,6 +73,13 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 		return nil, models.ErrInvalidRequest
 	}
 
+	// Auto-select model if mode is specified but no model is provided
+	if req.Mode != "" && req.Model == "" {
+		req.Model = d.selectModelForMode(req.Mode)
+	}
+
+	// Validate request after model auto-selection
+	fmt.Printf("DEBUG: Dispatcher validating request with Model='%s', Mode='%s'\n", req.Model, req.Mode)
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %v", models.ErrInvalidRequest, err)
 	}
@@ -95,17 +102,25 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 	// Use mode-based vendor selection
 	vendor, err := d.selectVendor(ctx, req)
 	if err != nil {
-		d.updateStats(false, "", time.Since(start))
+		d.updateStats(false, "", time.Since(start), 0.0)
 		return nil, fmt.Errorf("failed to select vendor: %w", err)
 	}
 
 	response, err := d.sendWithRetry(ctx, vendor, req)
 	if err != nil {
-		d.updateStats(false, vendor.Name(), time.Since(start))
+		d.updateStats(false, vendor.Name(), time.Since(start), 0.0)
 		return nil, err
 	}
 
-	d.updateStats(true, vendor.Name(), time.Since(start))
+	// Calculate estimated cost
+	var estimatedCost float64
+	if response != nil && response.Usage.TotalTokens > 0 {
+		totalTokens := response.Usage.PromptTokens + response.Usage.CompletionTokens
+		estimatedCost = estimateCost(totalTokens, vendor.Name())
+		response.EstimatedCost = estimatedCost
+	}
+
+	d.updateStats(true, vendor.Name(), time.Since(start), estimatedCost)
 	return response, nil
 }
 
@@ -119,9 +134,15 @@ func (d *Dispatcher) SendStreaming(ctx context.Context, req *models.Request) (*m
 		return nil, fmt.Errorf("%w: request cannot be nil", models.ErrInvalidRequest)
 	}
 
-	// Validate request
+	// Auto-select model if mode is specified but no model is provided
+	if req.Mode != "" && req.Model == "" {
+		req.Model = d.selectModelForMode(req.Mode)
+	}
+
+	// Validate request after model auto-selection
+	fmt.Printf("DEBUG: Dispatcher validating streaming request with Model='%s', Mode='%s'\n", req.Model, req.Mode)
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("request validation failed: %w", err)
+		return nil, fmt.Errorf("%w: %v", models.ErrInvalidRequest, err)
 	}
 
 	// Set streaming flag
@@ -145,7 +166,7 @@ func (d *Dispatcher) SendStreaming(ctx context.Context, req *models.Request) (*m
 	// Determine which vendor to use
 	vendor, err := d.selectVendor(ctx, req)
 	if err != nil {
-		d.updateStats(false, "", time.Since(start))
+		d.updateStats(false, "", time.Since(start), 0.0)
 		return nil, fmt.Errorf("failed to select vendor: %w", err)
 	}
 
@@ -157,11 +178,11 @@ func (d *Dispatcher) SendStreaming(ctx context.Context, req *models.Request) (*m
 	// Send streaming request
 	streamingResp, err := vendor.SendStreamingRequest(ctx, req)
 	if err != nil {
-		d.updateStats(false, vendor.Name(), time.Since(start))
+		d.updateStats(false, vendor.Name(), time.Since(start), 0.0)
 		return nil, err
 	}
 
-	d.updateStats(true, vendor.Name(), time.Since(start))
+	d.updateStats(true, vendor.Name(), time.Since(start), 0.0) // Cost not available for streaming
 	return streamingResp, nil
 }
 
@@ -202,11 +223,19 @@ func (d *Dispatcher) SendToVendor(ctx context.Context, vendorName string, req *m
 	// Send request
 	response, err := d.sendWithRetry(ctx, vendor, req)
 	if err != nil {
-		d.updateStats(false, vendor.Name(), time.Since(start))
+		d.updateStats(false, vendor.Name(), time.Since(start), 0.0)
 		return nil, err
 	}
 
-	d.updateStats(true, vendor.Name(), time.Since(start))
+	// Calculate estimated cost
+	var estimatedCost float64
+	if response != nil && response.Usage.TotalTokens > 0 {
+		totalTokens := response.Usage.PromptTokens + response.Usage.CompletionTokens
+		estimatedCost = estimateCost(totalTokens, vendor.Name())
+		response.EstimatedCost = estimatedCost
+	}
+
+	d.updateStats(true, vendor.Name(), time.Since(start), estimatedCost)
 	return response, nil
 }
 
@@ -255,11 +284,11 @@ func (d *Dispatcher) SendStreamingToVendor(ctx context.Context, vendorName strin
 	// Send streaming request
 	streamingResp, err := vendor.SendStreamingRequest(ctx, req)
 	if err != nil {
-		d.updateStats(false, vendor.Name(), time.Since(start))
+		d.updateStats(false, vendor.Name(), time.Since(start), 0.0)
 		return nil, err
 	}
 
-	d.updateStats(true, vendor.Name(), time.Since(start))
+	d.updateStats(true, vendor.Name(), time.Since(start), 0.0) // Cost not available for streaming
 	return streamingResp, nil
 }
 
@@ -385,7 +414,7 @@ func (d *Dispatcher) calculateBackoff(attempt int) time.Duration {
 }
 
 // updateStats updates the dispatcher statistics
-func (d *Dispatcher) updateStats(success bool, vendorName string, latency time.Duration) {
+func (d *Dispatcher) updateStats(success bool, vendorName string, latency time.Duration, cost float64) {
 	d.statsMutex.Lock()
 	defer d.statsMutex.Unlock()
 
@@ -393,6 +422,12 @@ func (d *Dispatcher) updateStats(success bool, vendorName string, latency time.D
 		d.stats.SuccessfulRequests++
 	} else {
 		d.stats.FailedRequests++
+	}
+
+	// Update cost statistics
+	d.stats.TotalCost += cost
+	if d.stats.TotalRequests > 0 {
+		d.stats.AverageCost = d.stats.TotalCost / float64(d.stats.TotalRequests)
 	}
 
 	// Update vendor-specific stats
@@ -411,6 +446,12 @@ func (d *Dispatcher) updateStats(success bool, vendorName string, latency time.D
 			stats.AverageLatency = latency
 		} else {
 			stats.AverageLatency = (stats.AverageLatency + latency) / 2
+		}
+
+		// Update cost statistics for vendor
+		stats.TotalCost += cost
+		if stats.Requests > 0 {
+			stats.AverageCost = stats.TotalCost / float64(stats.Requests)
 		}
 
 		d.stats.VendorStats[vendorName] = stats
@@ -439,6 +480,26 @@ func (d *Dispatcher) GetStats() *models.DispatcherStats {
 	return &stats
 }
 
+// estimateCost estimates the cost of a request based on token usage and vendor
+func estimateCost(totalTokens int, vendor string) float64 {
+	// Cost per 1K tokens for different vendors (approximate rates)
+	costPer1KTokens := map[string]float64{
+		"openai":    0.03, // GPT-3.5-turbo rate
+		"anthropic": 0.15, // Claude-3-Sonnet rate
+		"google":    0.05, // Gemini-Pro rate
+		"azure":     0.03, // Azure OpenAI rate
+		"local":     0.0,  // Local models are free
+	}
+
+	cost, exists := costPer1KTokens[vendor]
+	if !exists {
+		cost = 0.05 // Default cost
+	}
+
+	// Calculate cost for total tokens
+	return (float64(totalTokens) / 1000.0) * cost
+}
+
 // GetVendors returns a list of registered vendor names
 func (d *Dispatcher) GetVendors() []string {
 	vendors := make([]string, 0, len(d.vendors))
@@ -452,4 +513,22 @@ func (d *Dispatcher) GetVendors() []string {
 func (d *Dispatcher) GetVendor(name string) (models.LLMVendor, bool) {
 	vendor, exists := d.vendors[name]
 	return vendor, exists
+}
+
+// selectModelForMode selects an appropriate model based on the mode
+func (d *Dispatcher) selectModelForMode(mode string) string {
+	// Model selection based on mode
+	modelMap := map[string]string{
+		"fast":          "gpt-3.5-turbo", // Fast, cost-effective model
+		"sophisticated": "gpt-4o",        // High-quality model
+		"cost_saving":   "gpt-3.5-turbo", // Cost-effective model
+		"auto":          "gpt-3.5-turbo", // Default balanced model
+	}
+
+	if model, exists := modelMap[mode]; exists {
+		return model
+	}
+
+	// Default fallback
+	return "gpt-3.5-turbo"
 }

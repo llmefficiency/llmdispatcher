@@ -24,7 +24,7 @@ func TestRequest_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "empty model",
+			name: "empty model without mode",
 			request: &Request{
 				Model: "",
 				Messages: []Message{
@@ -32,6 +32,17 @@ func TestRequest_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
+		},
+		{
+			name: "empty model with mode",
+			request: &Request{
+				Model: "",
+				Mode:  "fast",
+				Messages: []Message{
+					{Role: "user", Content: "Hello"},
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name: "no messages",
@@ -93,6 +104,17 @@ func TestRequest_Validate(t *testing.T) {
 					{Role: "user", Content: "Hello"},
 				},
 				MaxTokens: -10,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid mode",
+			request: &Request{
+				Model: "",
+				Mode:  "invalid_mode",
+				Messages: []Message{
+					{Role: "user", Content: "Hello"},
+				},
 			},
 			wantErr: true,
 		},

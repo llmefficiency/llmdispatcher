@@ -35,6 +35,7 @@ type RequestPayload struct {
 	Stop        []string         `json:"stop,omitempty"`
 	User        string           `json:"user,omitempty"`
 	Vendor      string           `json:"vendor,omitempty"` // Optional vendor override
+	Mode        string           `json:"mode,omitempty"`   // Optional mode override
 }
 
 // ResponsePayload represents the response payload
@@ -349,6 +350,9 @@ func (ws *WebService) chatCompletionsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Debug logging
+	fmt.Printf("DEBUG: Received payload: Model='%s', Mode='%s', Messages=%d\n", payload.Model, payload.Mode, len(payload.Messages))
+
 	// Convert to internal request
 	req := &models.Request{
 		Model:       payload.Model,
@@ -359,12 +363,20 @@ func (ws *WebService) chatCompletionsHandler(w http.ResponseWriter, r *http.Requ
 		Stream:      false, // Force non-streaming for this endpoint
 		Stop:        payload.Stop,
 		User:        payload.User,
+		Mode:        payload.Mode,
 	}
 
-	// Validate request
-	if err := req.Validate(); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
-		return
+	// For mode-only requests, we'll validate after auto-selecting the model
+	if req.Mode != "" && req.Model == "" {
+		// Skip validation here, let the dispatcher handle it
+		fmt.Printf("DEBUG: Skipping validation for mode-only request: Mode='%s', Model='%s'\n", req.Mode, req.Model)
+	} else {
+		// Validate request for regular requests
+		fmt.Printf("DEBUG: Validating regular request: Mode='%s', Model='%s'\n", req.Mode, req.Model)
+		if err := req.Validate(); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Create context with timeout
@@ -379,8 +391,30 @@ func (ws *WebService) chatCompletionsHandler(w http.ResponseWriter, r *http.Requ
 		// Use specific vendor if provided
 		response, err = ws.dispatcher.SendToVendor(ctx, payload.Vendor, req)
 	} else {
-		// Use automatic vendor selection
-		response, err = ws.dispatcher.Send(ctx, req)
+		// Use mode-based vendor selection if mode is specified
+		if payload.Mode != "" {
+			// Create a temporary dispatcher with the specified mode
+			modeConfig := &models.Config{
+				Mode:          models.Mode(payload.Mode),
+				Timeout:       ws.config.Timeout,
+				EnableLogging: ws.config.EnableLogging,
+				EnableMetrics: ws.config.EnableMetrics,
+				RetryPolicy:   ws.config.RetryPolicy,
+				ModeOverrides: ws.config.ModeOverrides,
+			}
+
+			// Create a temporary dispatcher with the mode
+			tempDispatcher := dispatcher.NewWithConfig(modeConfig)
+
+			// Register the same vendors
+			registerVendors(tempDispatcher)
+
+			// Send request with mode-based selection
+			response, err = tempDispatcher.Send(ctx, req)
+		} else {
+			// Use automatic vendor selection
+			response, err = ws.dispatcher.Send(ctx, req)
+		}
 	}
 	if err != nil {
 		responsePayload := ResponsePayload{
@@ -392,6 +426,14 @@ func (ws *WebService) chatCompletionsHandler(w http.ResponseWriter, r *http.Requ
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		}
 		return
+	}
+
+	// Add estimated cost to response
+	if response != nil {
+		// Estimate cost based on token usage
+		totalTokens := response.Usage.PromptTokens + response.Usage.CompletionTokens
+		estimatedCost := estimateCost(totalTokens, response.Vendor)
+		response.EstimatedCost = estimatedCost
 	}
 
 	// Return success response
@@ -433,14 +475,22 @@ func (ws *WebService) streamingChatCompletionsHandler(w http.ResponseWriter, r *
 		Stream:      true, // Force streaming for this endpoint
 		Stop:        payload.Stop,
 		User:        payload.User,
+		Mode:        payload.Mode,
 	}
 
-	// Validate request
-	if err := req.Validate(); err != nil {
-		// Send error as SSE
-		fmt.Fprintf(w, "data: [ERROR] Invalid request: %v\n\n", err)
-		w.(http.Flusher).Flush()
-		return
+	// For mode-only requests, we'll validate after auto-selecting the model
+	if req.Mode != "" && req.Model == "" {
+		// Skip validation here, let the dispatcher handle it
+		fmt.Printf("DEBUG: Skipping validation for mode-only streaming request: Mode='%s', Model='%s'\n", req.Mode, req.Model)
+	} else {
+		// Validate request for regular requests
+		fmt.Printf("DEBUG: Validating regular streaming request: Mode='%s', Model='%s'\n", req.Mode, req.Model)
+		if err := req.Validate(); err != nil {
+			// Send error as SSE
+			fmt.Fprintf(w, "data: [ERROR] Invalid request: %v\n\n", err)
+			w.(http.Flusher).Flush()
+			return
+		}
 	}
 
 	// Create context with timeout
@@ -455,8 +505,30 @@ func (ws *WebService) streamingChatCompletionsHandler(w http.ResponseWriter, r *
 		// Use specific vendor if provided
 		streamResp, err = ws.dispatcher.SendStreamingToVendor(ctx, payload.Vendor, req)
 	} else {
-		// Use automatic vendor selection
-		streamResp, err = ws.dispatcher.SendStreaming(ctx, req)
+		// Use mode-based vendor selection if mode is specified
+		if payload.Mode != "" {
+			// Create a temporary dispatcher with the specified mode
+			modeConfig := &models.Config{
+				Mode:          models.Mode(payload.Mode),
+				Timeout:       ws.config.Timeout,
+				EnableLogging: ws.config.EnableLogging,
+				EnableMetrics: ws.config.EnableMetrics,
+				RetryPolicy:   ws.config.RetryPolicy,
+				ModeOverrides: ws.config.ModeOverrides,
+			}
+
+			// Create a temporary dispatcher with the mode
+			tempDispatcher := dispatcher.NewWithConfig(modeConfig)
+
+			// Register the same vendors
+			registerVendors(tempDispatcher)
+
+			// Send streaming request with mode-based selection
+			streamResp, err = tempDispatcher.SendStreaming(ctx, req)
+		} else {
+			// Use automatic vendor selection
+			streamResp, err = ws.dispatcher.SendStreaming(ctx, req)
+		}
 	}
 	if err != nil {
 		// Send error as SSE
@@ -619,7 +691,35 @@ func (ws *WebService) testVendorHandler(w http.ResponseWriter, r *http.Request) 
 // statsHandler handles statistics requests
 func (ws *WebService) statsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(ws.dispatcher.GetStats()); err != nil {
+
+	// Get mode filter from query parameter
+	mode := r.URL.Query().Get("mode")
+
+	stats := ws.dispatcher.GetStats()
+
+	// If mode is specified, we need to create a temporary dispatcher to get mode-specific stats
+	if mode != "" {
+		// Create a temporary dispatcher with the specified mode
+		modeConfig := &models.Config{
+			Mode:          models.Mode(mode),
+			Timeout:       ws.config.Timeout,
+			EnableLogging: ws.config.EnableLogging,
+			EnableMetrics: ws.config.EnableMetrics,
+			RetryPolicy:   ws.config.RetryPolicy,
+			ModeOverrides: ws.config.ModeOverrides,
+		}
+
+		// Create a temporary dispatcher with the mode
+		tempDispatcher := dispatcher.NewWithConfig(modeConfig)
+
+		// Register the same vendors
+		registerVendors(tempDispatcher)
+
+		// Get stats from the mode-specific dispatcher
+		stats = tempDispatcher.GetStats()
+	}
+
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }
@@ -730,6 +830,26 @@ func (ws *WebService) Shutdown(ctx context.Context) error {
 		return ws.server.Shutdown(ctx)
 	}
 	return nil
+}
+
+// estimateCost estimates the cost of a request based on token usage and vendor
+func estimateCost(totalTokens int, vendor string) float64 {
+	// Cost per 1K tokens for different vendors (approximate rates)
+	costPer1KTokens := map[string]float64{
+		"openai":    0.03, // GPT-3.5-turbo rate
+		"anthropic": 0.15, // Claude-3-Sonnet rate
+		"google":    0.05, // Gemini-Pro rate
+		"azure":     0.03, // Azure OpenAI rate
+		"local":     0.0,  // Local models are free
+	}
+
+	cost, exists := costPer1KTokens[vendor]
+	if !exists {
+		cost = 0.05 // Default cost
+	}
+
+	// Calculate cost for total tokens
+	return (float64(totalTokens) / 1000.0) * cost
 }
 
 func main() {

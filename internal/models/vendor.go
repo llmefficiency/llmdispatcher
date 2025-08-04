@@ -36,12 +36,17 @@ type Request struct {
 	Stream      bool      `json:"stream,omitempty"`
 	Stop        []string  `json:"stop,omitempty"`
 	User        string    `json:"user,omitempty"`
+	Mode        string    `json:"mode,omitempty"`
 }
 
 // Validate checks if the request is valid
 func (r *Request) Validate() error {
-	if r.Model == "" {
-		return fmt.Errorf("%w: model cannot be empty", ErrInvalidRequest)
+	// Debug logging
+	fmt.Printf("DEBUG: Validate called with Model='%s', Mode='%s'\n", r.Model, r.Mode)
+
+	// For mode-based requests, model is optional as it will be auto-selected
+	if r.Model == "" && r.Mode == "" {
+		return fmt.Errorf("%w: either model or mode must be specified", ErrInvalidRequest)
 	}
 
 	if len(r.Messages) == 0 {
@@ -61,6 +66,19 @@ func (r *Request) Validate() error {
 	// Validate max tokens
 	if r.MaxTokens < 0 {
 		return fmt.Errorf("%w: max_tokens cannot be negative", ErrInvalidRequest)
+	}
+
+	// Validate mode if specified
+	if r.Mode != "" {
+		validModes := map[string]bool{
+			"auto":          true,
+			"fast":          true,
+			"sophisticated": true,
+			"cost_saving":   true,
+		}
+		if !validModes[r.Mode] {
+			return fmt.Errorf("%w: invalid mode: %s", ErrInvalidRequest, r.Mode)
+		}
 	}
 
 	// Validate messages
@@ -105,12 +123,13 @@ func (m *Message) Validate() error {
 
 // Response represents a standardized LLM response
 type Response struct {
-	Content      string    `json:"content"`
-	Usage        Usage     `json:"usage"`
-	Model        string    `json:"model"`
-	Vendor       string    `json:"vendor"`
-	FinishReason string    `json:"finish_reason,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	Content       string    `json:"content"`
+	Usage         Usage     `json:"usage"`
+	Model         string    `json:"model"`
+	Vendor        string    `json:"vendor"`
+	FinishReason  string    `json:"finish_reason,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	EstimatedCost float64   `json:"estimated_cost,omitempty"`
 }
 
 // StreamingResponse represents a streaming LLM response
