@@ -53,6 +53,8 @@ jobs:
         LINT_STATUS=${{ steps.lint.outputs.lint_status }}
         BUILD_STATUS=${{ steps.build.outputs.build_status }}
         
+        echo "Updating badges with: Coverage=${COVERAGE}%, Lint=${LINT_STATUS}, Build=${BUILD_STATUS}"
+        
         # Update coverage badge
         sed -i "s|\[!\[Coverage\].*\]|\[!\[Coverage\]\(https://img.shields.io/badge/Coverage-${COVERAGE}%25-brightgreen\)\]|g" README.md
         
@@ -77,9 +79,13 @@ jobs:
           sed -i "s|\[!\[Code Quality\].*\]|\[!\[Code Quality\]\(https://img.shields.io/badge/Code%20Quality-Failing-red\)\]|g" README.md
         fi
         
-        # Commit and push changes
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add README.md
-        git commit -m "Update badges: Coverage ${COVERAGE}%, Tests ${LINT_STATUS}, Build ${BUILD_STATUS}" || exit 0
-        git push 
+        # Only commit if we're on main branch and not in a PR
+        if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git commit -m "Update badges: Coverage ${COVERAGE}%, Tests ${LINT_STATUS}, Build ${BUILD_STATUS}" || exit 0
+          git push
+        else
+          echo "Skipping commit - not on main branch or in PR"
+        fi 
