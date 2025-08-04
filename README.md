@@ -174,36 +174,56 @@ response, err := dispatcher.Send(context.Background(), request)
 
 ## 🔹 Live Demo
 
-**🚀 Try it now**: [Interactive Demo](https://github.com/llmefficiency/llmdispatcher/tree/main/cmd/example)
+**🚀 Try it now**: [Interactive Demo Web App](https://github.com/llmefficiency/llmdispatcher/tree/main/apps/server)
 
 ```bash
-# Clone and run the demo
+# Clone and run the demo web app
 git clone https://github.com/llmefficiency/llmdispatcher.git
 cd llmdispatcher
-cp cmd/example/env.example .env
+cp env.example .env
 # Edit .env with your API keys
 
-# Run with different modes:
-# Vendor mode with default vendor (openai)
-go run cmd/example/cli.go --vendor
+# Start the demo web app
+make webservice
+# Or run directly: go run apps/server/main.go
 
-# Vendor mode with specific vendor override
-go run cmd/example/cli.go --vendor --vendor-override anthropic
-
-# Local mode with Ollama
-go run cmd/example/cli.go --local
-
-# Local mode with custom model
-go run cmd/example/cli.go --local --model llama2:13b
+# Open http://localhost:8080 in your browser
 ```
 
-**Demo Features:**
+**Demo Web App Features:**
+- ✅ **Interactive Chat Interface** - Test different optimization modes
+- ✅ **Real-time Mode Comparison** - See all modes stats together in a clear table
+- ✅ **Per-mode Statistics** - Detailed breakdown for each mode
+- ✅ **Streaming Support** - Real-time streaming responses
+- ✅ **Multi-vendor Routing** - Automatic vendor selection based on mode
+- ✅ **Cost & Performance Tracking** - Monitor costs and latency across modes
+- ✅ **No Dropdown Selection** - All modes displayed together for easy comparison
+
+**CLI Demo Features:**
 - ✅ Multi-vendor request routing
 - ✅ Cost optimization examples
 - ✅ Streaming response demo
 - ✅ Fallback scenarios
 - ✅ Statistics and metrics
 - ✅ Local model integration with Ollama
+
+```bash
+# CLI demo with different modes:
+# Vendor mode with default vendor (openai)
+go run apps/cli/cli.go --vendor
+
+# Vendor mode with specific vendor override
+go run apps/cli/cli.go --vendor --vendor-override anthropic
+
+# Local mode with Ollama
+go run apps/cli/cli.go --local
+
+# Local mode with custom model
+go run apps/cli/cli.go --local --model llama2:13b
+
+# Mode comparison test
+go run apps/cli/cli.go --compare
+```
 
 ## Features
 

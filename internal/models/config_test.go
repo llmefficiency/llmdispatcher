@@ -1,7 +1,6 @@
 package models
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -197,17 +196,20 @@ func TestModeStrategy_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := &Config{Mode: tt.mode}
-			strategy := NewModeStrategy(tt.mode, config, make(map[string]LLMVendor))
+			registry := NewModeRegistry()
 
 			if tt.wantErr {
-				// For invalid mode, SelectVendor should return an error
-				_, err := strategy.SelectVendor(context.Background(), &Request{}, make(map[string]LLMVendor))
+				// For invalid mode, GetStrategy should return an error
+				_, err := registry.GetStrategy(tt.mode)
 				if err == nil {
 					t.Errorf("Expected error for invalid mode %s", tt.mode)
 				}
 			} else {
 				// For valid modes, the strategy should be created successfully
+				strategy, err := registry.GetStrategy(tt.mode)
+				if err != nil {
+					t.Errorf("Unexpected error for valid mode %s: %v", tt.mode, err)
+				}
 				if strategy.Name() != string(tt.mode) {
 					t.Errorf("Expected strategy name %s, got %s", tt.mode, strategy.Name())
 				}

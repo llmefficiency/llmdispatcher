@@ -80,14 +80,7 @@ func NewWebService() *WebService {
 			BackoffStrategy: models.ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		ModeOverrides: &models.ModeOverrides{
-			VendorPreferences: map[models.Mode][]string{
-				models.AutoMode:          {"openai", "anthropic", "google"},
-				models.FastMode:          {"local", "anthropic", "openai"},
-				models.SophisticatedMode: {"anthropic", "openai", "google"},
-				models.CostSavingMode:    {"local", "google", "openai", "anthropic"},
-			},
-		},
+		// No ModeOverrides - let the real ModeStrategy work
 	}
 
 	// Create dispatcher
@@ -255,6 +248,9 @@ func (ws *WebService) setupRoutes() *mux.Router {
 	// Statistics endpoint
 	api.HandleFunc("/stats", ws.statsHandler).Methods("GET")
 
+	// Mode comparison endpoint
+	api.HandleFunc("/stats/modes", ws.modeComparisonHandler).Methods("GET")
+
 	// Vendors endpoint
 	api.HandleFunc("/vendors", ws.vendorsHandler).Methods("GET")
 
@@ -366,6 +362,11 @@ func (ws *WebService) chatCompletionsHandler(w http.ResponseWriter, r *http.Requ
 		Mode:        payload.Mode,
 	}
 
+	// If no model is specified but mode is, let the ModeStrategy handle model selection
+	if req.Model == "" && req.Mode != "" {
+		fmt.Printf("DEBUG: No model specified for mode '%s', letting ModeStrategy select appropriate model\n", req.Mode)
+	}
+
 	// For mode-only requests, we'll validate after auto-selecting the model
 	if req.Mode != "" && req.Model == "" {
 		// Skip validation here, let the dispatcher handle it
@@ -393,24 +394,10 @@ func (ws *WebService) chatCompletionsHandler(w http.ResponseWriter, r *http.Requ
 	} else {
 		// Use mode-based vendor selection if mode is specified
 		if payload.Mode != "" {
-			// Create a temporary dispatcher with the specified mode
-			modeConfig := &models.Config{
-				Mode:          models.Mode(payload.Mode),
-				Timeout:       ws.config.Timeout,
-				EnableLogging: ws.config.EnableLogging,
-				EnableMetrics: ws.config.EnableMetrics,
-				RetryPolicy:   ws.config.RetryPolicy,
-				ModeOverrides: ws.config.ModeOverrides,
-			}
-
-			// Create a temporary dispatcher with the mode
-			tempDispatcher := dispatcher.NewWithConfig(modeConfig)
-
-			// Register the same vendors
-			registerVendors(tempDispatcher)
-
-			// Send request with mode-based selection
-			response, err = tempDispatcher.Send(ctx, req)
+			// Update the request with the specified mode and use the existing dispatcher
+			// The dispatcher will handle mode-based vendor selection internally
+			req.Mode = payload.Mode
+			response, err = ws.dispatcher.Send(ctx, req)
 		} else {
 			// Use automatic vendor selection
 			response, err = ws.dispatcher.Send(ctx, req)
@@ -507,24 +494,10 @@ func (ws *WebService) streamingChatCompletionsHandler(w http.ResponseWriter, r *
 	} else {
 		// Use mode-based vendor selection if mode is specified
 		if payload.Mode != "" {
-			// Create a temporary dispatcher with the specified mode
-			modeConfig := &models.Config{
-				Mode:          models.Mode(payload.Mode),
-				Timeout:       ws.config.Timeout,
-				EnableLogging: ws.config.EnableLogging,
-				EnableMetrics: ws.config.EnableMetrics,
-				RetryPolicy:   ws.config.RetryPolicy,
-				ModeOverrides: ws.config.ModeOverrides,
-			}
-
-			// Create a temporary dispatcher with the mode
-			tempDispatcher := dispatcher.NewWithConfig(modeConfig)
-
-			// Register the same vendors
-			registerVendors(tempDispatcher)
-
-			// Send streaming request with mode-based selection
-			streamResp, err = tempDispatcher.SendStreaming(ctx, req)
+			// Update the request with the specified mode and use the existing dispatcher
+			// The dispatcher will handle mode-based vendor selection internally
+			req.Mode = payload.Mode
+			streamResp, err = ws.dispatcher.SendStreaming(ctx, req)
 		} else {
 			// Use automatic vendor selection
 			streamResp, err = ws.dispatcher.SendStreaming(ctx, req)
@@ -706,7 +679,7 @@ func (ws *WebService) statsHandler(w http.ResponseWriter, r *http.Request) {
 			EnableLogging: ws.config.EnableLogging,
 			EnableMetrics: ws.config.EnableMetrics,
 			RetryPolicy:   ws.config.RetryPolicy,
-			ModeOverrides: ws.config.ModeOverrides,
+			// No ModeOverrides - let the real ModeStrategy work
 		}
 
 		// Create a temporary dispatcher with the mode
@@ -715,11 +688,102 @@ func (ws *WebService) statsHandler(w http.ResponseWriter, r *http.Request) {
 		// Register the same vendors
 		registerVendors(tempDispatcher)
 
+		// Send a test request to generate some stats for this mode
+		testRequest := &models.Request{
+			Model: "gpt-3.5-turbo",
+			Messages: []models.Message{
+				{
+					Role:    "user",
+					Content: "Test request for stats",
+				},
+			},
+			Temperature: 0.7,
+			MaxTokens:   50,
+		}
+
+		ctx := context.Background()
+		_, err := tempDispatcher.Send(ctx, testRequest)
+		if err != nil {
+			log.Printf("⚠️  Mode %s stats test failed: %v", mode, err)
+		}
+
 		// Get stats from the mode-specific dispatcher
 		stats = tempDispatcher.GetStats()
 	}
 
+	// Add debug logging
+	fmt.Printf("DEBUG: Stats request - Mode: '%s', Total Requests: %d, Successful: %d, Failed: %d\n",
+		mode, stats.TotalRequests, stats.SuccessfulRequests, stats.FailedRequests)
+
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// modeComparisonHandler handles mode comparison requests
+func (ws *WebService) modeComparisonHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Define all available modes
+	modes := []models.Mode{
+		models.AutoMode,
+		models.FastMode,
+		models.SophisticatedMode,
+		models.CostSavingMode,
+	}
+
+	modeStats := make(map[string]*models.DispatcherStats)
+
+	// Test each mode with a simple request
+	testRequest := &models.Request{
+		Model: "gpt-3.5-turbo",
+		Messages: []models.Message{
+			{
+				Role:    "user",
+				Content: "Hello! Can you tell me a short joke?",
+			},
+		},
+		Temperature: 0.7,
+		MaxTokens:   100,
+	}
+
+	for _, mode := range modes {
+		// Create a test request with the specific mode
+		modeTestRequest := &models.Request{
+			Model: "gpt-3.5-turbo",
+			Messages: []models.Message{
+				{
+					Role:    "user",
+					Content: "Hello! Can you tell me a short joke?",
+				},
+			},
+			Temperature: 0.7,
+			MaxTokens:   100,
+			Mode:        string(mode), // Set the mode in the request
+		}
+
+		// Send a test request using the existing dispatcher with mode-based selection
+		ctx := context.Background()
+		_, err := ws.dispatcher.Send(ctx, modeTestRequest)
+		if err != nil {
+			log.Printf("⚠️  Mode %s test failed: %v", mode, err)
+		}
+
+		// Get stats from the main dispatcher
+		stats := ws.dispatcher.GetStats()
+		modeStats[string(mode)] = stats
+	}
+
+	// Create comparison response
+	comparison := map[string]interface{}{
+		"modes": modeStats,
+		"summary": map[string]interface{}{
+			"total_modes":  len(modes),
+			"test_request": testRequest,
+		},
+	}
+
+	if err := json.NewEncoder(w).Encode(comparison); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }

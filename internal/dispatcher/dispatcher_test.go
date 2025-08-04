@@ -660,7 +660,7 @@ func TestDispatcher_SelectVendor_NoVendors(t *testing.T) {
 		},
 	}
 
-	vendor, err := dispatcher.selectVendor(context.Background(), req)
+	vendor, err := dispatcher.selectVendorWithMode(context.Background(), req)
 	if err == nil {
 		t.Error("Expected error when no vendors are registered")
 	}
@@ -686,7 +686,7 @@ func TestDispatcher_SelectVendor_Unavailable(t *testing.T) {
 		},
 	}
 
-	vendor, err := dispatcher.selectVendor(context.Background(), req)
+	vendor, err := dispatcher.selectVendorWithMode(context.Background(), req)
 	if err == nil {
 		t.Error("Expected error when no vendors are available")
 	}
@@ -714,7 +714,7 @@ func TestDispatcher_SelectVendor_ModeBased(t *testing.T) {
 		},
 	}
 
-	vendor, err := dispatcher.selectVendor(context.Background(), req)
+	vendor, err := dispatcher.selectVendorWithMode(context.Background(), req)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -745,7 +745,7 @@ func TestDispatcher_SelectVendor_AvailableVendor(t *testing.T) {
 		},
 	}
 
-	vendor, err := dispatcher.selectVendor(context.Background(), req)
+	vendor, err := dispatcher.selectVendorWithMode(context.Background(), req)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}

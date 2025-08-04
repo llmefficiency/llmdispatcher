@@ -252,6 +252,11 @@ func (g *GoogleVendor) convertRequest(req *models.Request) *googleRequest {
 		},
 	}
 
+	// Only set Stream field for streaming requests
+	if req.Stream {
+		googleReq.Stream = true
+	}
+
 	return googleReq
 }
 
@@ -283,7 +288,7 @@ func (g *GoogleVendor) convertResponse(googleResp *googleResponse, model string)
 type googleRequest struct {
 	Contents         []googleContent        `json:"contents"`
 	GenerationConfig googleGenerationConfig `json:"generationConfig"`
-	Stream           bool                   `json:"stream"`
+	Stream           bool                   `json:"stream,omitempty"`
 }
 
 type googleContent struct {

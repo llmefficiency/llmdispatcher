@@ -388,6 +388,107 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
+
+        .stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f8f9fa;
+        }
+
+        .stats-header h3 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .stats-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .auto-update-indicator {
+            font-size: 12px;
+            color: #6c757d;
+            font-style: italic;
+            padding: 4px 8px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 4px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .comparison-section {
+            margin-bottom: 40px;
+        }
+
+        .comparison-section h4 {
+            color: #2c3e50;
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .comparison-table-container {
+            overflow-x: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            font-size: 14px;
+        }
+
+        .comparison-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .comparison-table td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #f1f3f4;
+            font-size: 14px;
+        }
+
+        .comparison-table tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .comparison-table tr:nth-child(even) {
+            background-color: #fafbfc;
+        }
+
+        .loading-row {
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+            padding: 20px !important;
+        }
+
+        .mode-details-section {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #f8f9fa;
+        }
+
+        .mode-details-section h4 {
+            color: #2c3e50;
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
         
         .hidden {
             display: none;
@@ -499,43 +600,94 @@
             </div>
         </div>
 
-        <!-- Statistics Panel -->
+        <!-- Enhanced Statistics Panel -->
         <div class="stats-panel">
-            <h3>📊 Statistics</h3>
-            <div class="mode-selector">
-                <label for="statsMode">📈 View stats for mode:</label>
-                <select id="statsMode" class="mode-select" onchange="updateStats()">
-                    <option value="all">All Modes</option>
-                    <option value="auto">Auto Mode</option>
-                    <option value="fast">Fast Mode</option>
-                    <option value="sophisticated">Sophisticated Mode</option>
-                    <option value="cost_saving">Cost Saving Mode</option>
-                </select>
+            <div class="stats-header">
+                <h3>📊 Demo Web App - Mode Statistics</h3>
+                <div class="stats-controls">
+                    <button class="btn-secondary" onclick="refreshModeComparison()" id="refreshBtn">
+                        🔄 Refresh Comparison
+                    </button>
+                    <div class="auto-update-indicator" id="lastUpdated">
+                        Auto-updating every 5s
+                    </div>
+                </div>
             </div>
-            <div class="stats-grid" id="statsGrid">
-                <div class="stat-card">
-                    <div class="stat-value">-</div>
-                    <div class="stat-label">Total Requests</div>
+            
+            <!-- Mode Comparison Table -->
+            <div class="comparison-section">
+                <h4>🎯 Mode Comparison (All Modes Together)</h4>
+                <div class="comparison-table-container">
+                    <table class="comparison-table" id="comparisonTable">
+                        <thead>
+                            <tr>
+                                <th>Mode</th>
+                                <th>Requests</th>
+                                <th>Successful</th>
+                                <th>Failed</th>
+                                <th>Success Rate</th>
+                                <th>Avg Latency</th>
+                                <th>Total Cost</th>
+                                <th>Avg Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comparisonTableBody">
+                            <tr>
+                                <td colspan="8" class="loading-row">Loading mode comparison...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value">-</div>
-                    <div class="stat-label">Successful</div>
+            </div>
+
+            <!-- Individual Mode Details -->
+            <div class="mode-details-section">
+                <h4>🔍 Individual Mode Details</h4>
+                <div class="mode-selector">
+                    <label for="statsMode">📈 View detailed stats for mode:</label>
+                    <select id="statsMode" class="mode-select" onchange="updateModeDetails()">
+                        <option value="all">All Modes</option>
+                        <option value="auto">Auto Mode</option>
+                        <option value="fast">Fast Mode</option>
+                        <option value="sophisticated">Sophisticated Mode</option>
+                        <option value="cost_saving">Cost Saving Mode</option>
+                    </select>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value">-</div>
-                    <div class="stat-label">Failed</div>
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Total Requests</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Successful</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Avg Latency</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Total Cost</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Avg Cost</div>
+                    </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value">-</div>
-                    <div class="stat-label">Avg Latency</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">-</div>
-                    <div class="stat-label">Total Cost</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">-</div>
-                    <div class="stat-label">Avg Cost</div>
+            </div>
+
+            <!-- Debug Panel -->
+            <div class="debug-panel" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+                <h5 style="margin: 0 0 10px 0; color: #6c757d; font-size: 14px;">🐛 Debug Info</h5>
+                <div id="debugInfo" style="font-family: monospace; font-size: 12px; color: #495057;">
+                    <div>Last stats update: <span id="lastStatsUpdate">Never</span></div>
+                    <div>Last comparison update: <span id="lastComparisonUpdate">Never</span></div>
+                    <div>Server status: <span id="serverStatus">Unknown</span></div>
                 </div>
             </div>
         </div>
@@ -592,17 +744,26 @@
             const healthStatus = document.getElementById('healthStatus');
             const healthIcon = document.getElementById('healthIcon');
             const vendorCount = document.getElementById('vendorCount');
+            const serverStatus = document.getElementById('serverStatus');
             
             if (healthy) {
                 healthStatus.className = 'status-item status-healthy';
                 healthIcon.textContent = '✅';
                 healthStatus.innerHTML = '<span>✅</span> Healthy';
                 vendorCount.textContent = vendors.length;
+                if (serverStatus) {
+                    serverStatus.textContent = 'Healthy';
+                    serverStatus.style.color = '#28a745';
+                }
             } else {
                 healthStatus.className = 'status-item status-unhealthy';
                 healthIcon.textContent = '❌';
                 healthStatus.innerHTML = '<span>❌</span> Unhealthy';
                 vendorCount.textContent = '0';
+                if (serverStatus) {
+                    serverStatus.textContent = 'Unhealthy';
+                    serverStatus.style.color = '#dc3545';
+                }
             }
         }
 
@@ -814,8 +975,13 @@ ${data.data.content}
         async function updateStats() {
             try {
                 const selectedMode = document.getElementById('statsMode').value;
-                const response = await fetch(`${API_BASE}/stats${selectedMode !== 'all' ? `?mode=${selectedMode}` : ''}`);
+                const url = `${API_BASE}/stats${selectedMode !== 'all' ? `?mode=${selectedMode}` : ''}`;
+                console.log('DEBUG: Fetching stats from:', url);
+                
+                const response = await fetch(url);
                 const data = await response.json();
+                
+                console.log('DEBUG: Received stats data:', data);
                 
                 const statsGrid = document.getElementById('statsGrid');
                 const statCards = statsGrid.children;
@@ -826,8 +992,95 @@ ${data.data.content}
                 statCards[3].querySelector('.stat-value').textContent = formatLatency(data.average_latency);
                 statCards[4].querySelector('.stat-value').textContent = formatCost(data.total_cost);
                 statCards[5].querySelector('.stat-value').textContent = formatCost(data.average_cost);
+                
+                // Add a subtle visual indicator that stats were updated
+                const lastUpdated = document.getElementById('lastUpdated');
+                if (lastUpdated) {
+                    lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+                }
+                
+                // Update debug info
+                const lastStatsUpdate = document.getElementById('lastStatsUpdate');
+                if (lastStatsUpdate) {
+                    lastStatsUpdate.textContent = new Date().toLocaleTimeString();
+                }
             } catch (error) {
                 console.error('Failed to update stats:', error);
+            }
+        }
+
+        async function updateModeDetails() {
+            await updateStats();
+        }
+
+        async function refreshModeComparison() {
+            const tableBody = document.getElementById('comparisonTableBody');
+            const refreshBtn = document.getElementById('refreshBtn');
+            
+            // Show loading state
+            tableBody.innerHTML = '<tr><td colspan="8" class="loading-row">🔄 Loading mode comparison...</td></tr>';
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '⏳ Loading...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/stats/modes`);
+                const data = await response.json();
+                
+                if (data.modes) {
+                    updateComparisonTable(data.modes);
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="8" class="loading-row">No mode data available</td></tr>';
+                }
+            } catch (error) {
+                console.error('Failed to load mode comparison:', error);
+                tableBody.innerHTML = '<tr><td colspan="8" class="loading-row">❌ Error loading mode comparison</td></tr>';
+            } finally {
+                // Reset button state
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '🔄 Refresh Comparison';
+            }
+        }
+
+        function updateComparisonTable(modeStats) {
+            const tableBody = document.getElementById('comparisonTableBody');
+            tableBody.innerHTML = '';
+            
+            const modeNames = {
+                'auto': 'Auto Mode',
+                'fast': 'Fast Mode', 
+                'sophisticated': 'Sophisticated Mode',
+                'cost_saving': 'Cost Saving Mode'
+            };
+            
+            Object.entries(modeStats).forEach(([modeKey, stats]) => {
+                const successRate = stats.total_requests > 0 
+                    ? ((stats.successful_requests / stats.total_requests) * 100).toFixed(1)
+                    : '0.0';
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${modeNames[modeKey] || modeKey}</strong></td>
+                    <td>${stats.total_requests || 0}</td>
+                    <td>${stats.successful_requests || 0}</td>
+                    <td>${stats.failed_requests || 0}</td>
+                    <td><strong>${successRate}%</strong></td>
+                    <td>${formatLatency(stats.average_latency)}</td>
+                    <td>${formatCost(stats.total_cost)}</td>
+                    <td>${formatCost(stats.average_cost)}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            // Update the last updated time for comparison table
+            const comparisonSection = document.querySelector('.comparison-section h4');
+            if (comparisonSection) {
+                comparisonSection.innerHTML = `🎯 Mode Comparison (All Modes Together) <small style="font-size: 0.8em; color: #6c757d;">Last updated: ${new Date().toLocaleTimeString()}</small>`;
+            }
+            
+            // Update debug info
+            const lastComparisonUpdate = document.getElementById('lastComparisonUpdate');
+            if (lastComparisonUpdate) {
+                lastComparisonUpdate.textContent = new Date().toLocaleTimeString();
             }
         }
 
@@ -835,9 +1088,13 @@ ${data.data.content}
         async function init() {
             await checkHealth();
             await updateStats();
+            await refreshModeComparison();
             
-            // Update stats every 10 seconds
-            setInterval(updateStats, 10000);
+            // Update stats every 5 seconds
+            setInterval(updateStats, 5000);
+            
+            // Update mode comparison every 15 seconds
+            setInterval(refreshModeComparison, 15000);
         }
 
         // Start the application

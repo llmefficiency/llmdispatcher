@@ -12,11 +12,12 @@ import (
 
 // Dispatcher manages routing of LLM requests to different vendors
 type Dispatcher struct {
-	vendors    map[string]models.LLMVendor
-	config     *models.Config
-	stats      *models.DispatcherStats
-	statsMutex sync.RWMutex
-	logger     *log.Logger
+	vendors      map[string]models.LLMVendor
+	config       *models.Config
+	stats        *models.DispatcherStats
+	statsMutex   sync.RWMutex
+	logger       *log.Logger
+	modeRegistry *models.ModeRegistry
 }
 
 // New creates a new dispatcher with default configuration
@@ -40,8 +41,10 @@ func NewWithConfig(config *models.Config) *Dispatcher {
 		config:  config,
 		stats: &models.DispatcherStats{
 			VendorStats: make(map[string]models.VendorStats),
+			ModeStats:   make(map[models.Mode]*models.ModeStats),
 		},
-		logger: log.New(log.Writer(), "[LLMDispatcher] ", log.LstdFlags),
+		logger:       log.New(log.Writer(), "[LLMDispatcher] ", log.LstdFlags),
+		modeRegistry: models.NewModeRegistry(),
 	}
 
 	return dispatcher
@@ -73,12 +76,7 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 		return nil, models.ErrInvalidRequest
 	}
 
-	// Auto-select model if mode is specified but no model is provided
-	if req.Mode != "" && req.Model == "" {
-		req.Model = d.selectModelForMode(req.Mode)
-	}
-
-	// Validate request after model auto-selection
+	// Validate request
 	fmt.Printf("DEBUG: Dispatcher validating request with Model='%s', Mode='%s'\n", req.Model, req.Mode)
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %v", models.ErrInvalidRequest, err)
@@ -99,8 +97,8 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 		defer cancel()
 	}
 
-	// Use mode-based vendor selection
-	vendor, err := d.selectVendor(ctx, req)
+	// Use mode-based vendor selection with context preprocessing
+	vendor, err := d.selectVendorWithMode(ctx, req)
 	if err != nil {
 		d.updateStats(false, "", time.Since(start), 0.0)
 		return nil, fmt.Errorf("failed to select vendor: %w", err)
@@ -134,12 +132,7 @@ func (d *Dispatcher) SendStreaming(ctx context.Context, req *models.Request) (*m
 		return nil, fmt.Errorf("%w: request cannot be nil", models.ErrInvalidRequest)
 	}
 
-	// Auto-select model if mode is specified but no model is provided
-	if req.Mode != "" && req.Model == "" {
-		req.Model = d.selectModelForMode(req.Mode)
-	}
-
-	// Validate request after model auto-selection
+	// Validate request
 	fmt.Printf("DEBUG: Dispatcher validating streaming request with Model='%s', Mode='%s'\n", req.Model, req.Mode)
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %v", models.ErrInvalidRequest, err)
@@ -163,8 +156,8 @@ func (d *Dispatcher) SendStreaming(ctx context.Context, req *models.Request) (*m
 		defer cancel()
 	}
 
-	// Determine which vendor to use
-	vendor, err := d.selectVendor(ctx, req)
+	// Use mode-based vendor selection with context preprocessing
+	vendor, err := d.selectVendorWithMode(ctx, req)
 	if err != nil {
 		d.updateStats(false, "", time.Since(start), 0.0)
 		return nil, fmt.Errorf("failed to select vendor: %w", err)
@@ -292,28 +285,92 @@ func (d *Dispatcher) SendStreamingToVendor(ctx context.Context, vendorName strin
 	return streamingResp, nil
 }
 
-// selectVendor selects the appropriate vendor based on mode and availability
-func (d *Dispatcher) selectVendor(ctx context.Context, req *models.Request) (models.LLMVendor, error) {
-	// Create mode strategy for vendor selection
-	modeStrategy := models.NewModeStrategy(d.config.Mode, d.config, d.vendors)
-
-	// Use mode-based vendor selection
-	vendor, err := modeStrategy.SelectVendor(ctx, req, d.vendors)
-	if err != nil {
-		d.logger.Printf("Mode-based routing failed: %v", err)
+// selectVendorWithMode uses the new mode system to select vendors with context preprocessing
+func (d *Dispatcher) selectVendorWithMode(ctx context.Context, req *models.Request) (models.LLMVendor, error) {
+	// Determine the mode to use
+	mode := d.config.Mode
+	if req.Mode != "" {
+		// TODO: Validate that the request mode is valid
+		// For now, we'll use the request mode if specified
+		mode = models.Mode(req.Mode)
 	}
 
-	// If mode-based selection failed, try any available vendor
-	if vendor == nil {
+	// Get the mode strategy
+	strategy, err := d.modeRegistry.GetStrategy(mode)
+	if err != nil {
+		d.logger.Printf("Failed to get mode strategy for %s: %v", mode, err)
+		// Fallback to any available vendor
 		for name, vendor := range d.vendors {
 			if vendor.IsAvailable(ctx) {
-				d.logger.Printf("Using available vendor: %s", name)
+				d.logger.Printf("Using fallback vendor: %s", name)
 				return vendor, nil
 			}
 		}
+		return nil, fmt.Errorf("no available vendors")
 	}
 
-	return vendor, err
+	// Create mode context
+	modeContext := &models.ModeContext{
+		Mode:             mode,
+		Request:          req,
+		AvailableVendors: d.vendors,
+		Config:           d.config,
+		Stats:            d.getModeStats(mode),
+		Context:          ctx,
+	}
+
+	// Validate context
+	if err := strategy.ValidateContext(modeContext); err != nil {
+		d.logger.Printf("Mode context validation failed: %v", err)
+		return nil, fmt.Errorf("mode context validation failed: %w", err)
+	}
+
+	// Preprocess context based on mode
+	if err := strategy.PreprocessContext(modeContext); err != nil {
+		d.logger.Printf("Context preprocessing failed: %v", err)
+		// Continue without preprocessing rather than failing
+	}
+
+	// Optimize request for the mode
+	if err := strategy.OptimizeRequest(modeContext); err != nil {
+		d.logger.Printf("Request optimization failed: %v", err)
+		// Continue without optimization rather than failing
+	}
+
+	// Select vendor using the mode strategy
+	vendor, err := strategy.SelectVendor(modeContext)
+	if err != nil {
+		d.logger.Printf("Mode-based vendor selection failed: %v", err)
+		// Fallback to any available vendor
+		for name, vendor := range d.vendors {
+			if vendor.IsAvailable(ctx) {
+				d.logger.Printf("Using fallback vendor: %s", name)
+				return vendor, nil
+			}
+		}
+		return nil, fmt.Errorf("no available vendors")
+	}
+
+	d.logger.Printf("Selected vendor %s using mode %s", vendor.Name(), mode)
+	return vendor, nil
+}
+
+// getModeStats returns the stats for a specific mode, creating if necessary
+func (d *Dispatcher) getModeStats(mode models.Mode) *models.ModeStats {
+	d.statsMutex.Lock()
+	defer d.statsMutex.Unlock()
+
+	if d.stats.ModeStats == nil {
+		d.stats.ModeStats = make(map[models.Mode]*models.ModeStats)
+	}
+
+	stats, exists := d.stats.ModeStats[mode]
+	if !exists {
+		stats = &models.ModeStats{}
+		d.stats.ModeStats[mode] = stats
+	}
+
+	return stats
 }
 
 // sendWithRetry sends a request with retry logic
@@ -477,6 +534,12 @@ func (d *Dispatcher) GetStats() *models.DispatcherStats {
 		stats.VendorStats[k] = v
 	}
 
+	// Copy mode stats
+	stats.ModeStats = make(map[models.Mode]*models.ModeStats)
+	for k, v := range d.stats.ModeStats {
+		stats.ModeStats[k] = v
+	}
+
 	return &stats
 }
 
@@ -515,20 +578,12 @@ func (d *Dispatcher) GetVendor(name string) (models.LLMVendor, bool) {
 	return vendor, exists
 }
 
-// selectModelForMode selects an appropriate model based on the mode
-func (d *Dispatcher) selectModelForMode(mode string) string {
-	// Model selection based on mode
-	modelMap := map[string]string{
-		"fast":          "gpt-3.5-turbo", // Fast, cost-effective model
-		"sophisticated": "gpt-4o",        // High-quality model
-		"cost_saving":   "gpt-3.5-turbo", // Cost-effective model
-		"auto":          "gpt-3.5-turbo", // Default balanced model
-	}
+// GetModeRegistry returns the mode registry for external access
+func (d *Dispatcher) GetModeRegistry() *models.ModeRegistry {
+	return d.modeRegistry
+}
 
-	if model, exists := modelMap[mode]; exists {
-		return model
-	}
-
-	// Default fallback
-	return "gpt-3.5-turbo"
+// RegisterModeStrategy registers a custom mode strategy
+func (d *Dispatcher) RegisterModeStrategy(mode models.Mode, strategy models.ModeStrategy) {
+	d.modeRegistry.RegisterStrategy(mode, strategy)
 }
