@@ -351,8 +351,87 @@ func (d *Dispatcher) selectVendorWithMode(ctx context.Context, req *models.Reque
 		return nil, fmt.Errorf("no available vendors")
 	}
 
+	// If no model is specified but we have a mode, select an appropriate model
+	if req.Model == "" && req.Mode != "" {
+		selectedModel := selectModelForVendorAndMode(vendor.Name(), mode)
+		if selectedModel != "" {
+			req.Model = selectedModel
+			d.logger.Printf("Auto-selected model '%s' for vendor '%s' in mode '%s'", selectedModel, vendor.Name(), mode)
+		} else {
+			d.logger.Printf("Warning: Could not auto-select model for vendor '%s' in mode '%s'", vendor.Name(), mode)
+		}
+	}
+
 	d.logger.Printf("Selected vendor %s using mode %s", vendor.Name(), mode)
 	return vendor, nil
+}
+
+// selectModelForVendorAndMode selects an appropriate model for a given vendor and mode
+func selectModelForVendorAndMode(vendor string, mode models.Mode) string {
+	availableModels := models.GetVendorModels(vendor)
+	if len(availableModels) == 0 {
+		return ""
+	}
+
+	switch mode {
+	case models.FastMode:
+		// For fast mode, prefer faster models
+		fastModels := map[string][]string{
+			"openai":    {"gpt-3.5-turbo", "gpt-4o-mini"},
+			"anthropic": {"claude-3-5-haiku-20241022", "claude-3-haiku-20240307"},
+			"google":    {"gemini-1.5-flash", "gemini-pro"},
+			"local":     {"llama2:7b", "mistral:7b"},
+		}
+		if fastModelsForVendor, exists := fastModels[vendor]; exists {
+			for _, model := range fastModelsForVendor {
+				if models.IsValidModel(vendor, model) {
+					return model
+				}
+			}
+		}
+		// Fallback to first available model
+		return availableModels[0]
+
+	case models.SophisticatedMode:
+		// For sophisticated mode, prefer more capable models
+		sophisticatedModels := map[string][]string{
+			"openai":    {"gpt-4o", "gpt-4-turbo", "gpt-4"},
+			"anthropic": {"claude-3-5-sonnet-20241022", "claude-3-opus-20240229"},
+			"google":    {"gemini-1.5-pro", "gemini-pro"},
+			"local":     {"llama2:70b", "llama3:70b"},
+		}
+		if sophisticatedModelsForVendor, exists := sophisticatedModels[vendor]; exists {
+			for _, model := range sophisticatedModelsForVendor {
+				if models.IsValidModel(vendor, model) {
+					return model
+				}
+			}
+		}
+		// Fallback to first available model
+		return availableModels[0]
+
+	case models.CostSavingMode:
+		// For cost saving mode, prefer cheaper models
+		costSavingModels := map[string][]string{
+			"openai":    {"gpt-3.5-turbo", "gpt-4o-mini"},
+			"anthropic": {"claude-3-5-haiku-20241022", "claude-3-haiku-20240307"},
+			"google":    {"gemini-1.5-flash", "gemini-pro"},
+			"local":     {"llama2:7b", "mistral:7b"},
+		}
+		if costSavingModelsForVendor, exists := costSavingModels[vendor]; exists {
+			for _, model := range costSavingModelsForVendor {
+				if models.IsValidModel(vendor, model) {
+					return model
+				}
+			}
+		}
+		// Fallback to first available model
+		return availableModels[0]
+
+	default: // AutoMode or any other mode
+		// For auto mode, use a balanced approach - prefer the first model
+		return availableModels[0]
+	}
 }
 
 // getModeStats returns the stats for a specific mode, creating if necessary
