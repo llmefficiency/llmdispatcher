@@ -36,23 +36,7 @@ jobs:
     - name: Run tests
       run: go test -v ./...
 
-    - name: Run tests with coverage
-      id: coverage
-      run: |
-        go test -coverprofile=coverage.out ./...
-        COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
-        echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
 
-    - name: Update coverage badge
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: |
-        COVERAGE=${{ steps.coverage.outputs.coverage }}
-        sed -i "s/\[!\[Coverage\](https:\/\/img\.shields\.io\/badge\/Coverage-[0-9.]*%25-brightgreen)\]/\[!\[Coverage\](https:\/\/img\.shields\.io\/badge\/Coverage-${COVERAGE}%25-brightgreen)\]/" README.md
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add README.md
-        git commit -m "Update coverage badge to ${COVERAGE}%" || echo "No changes to commit"
-        git push || echo "No changes to push"
 
   build:
     name: Build
