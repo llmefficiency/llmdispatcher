@@ -120,9 +120,6 @@ type Config struct {
 	// Retry configuration
 	RetryPolicy *RetryPolicy `json:"retry_policy,omitempty"`
 
-	// Mode-specific overrides (optional)
-	ModeOverrides *ModeOverrides `json:"mode_overrides,omitempty"`
-
 	// Context preprocessing configuration
 	ContextPreprocessing *ContextPreprocessingConfig `json:"context_preprocessing,omitempty"`
 }
@@ -147,24 +144,6 @@ type PreprocessingRule struct {
 	Condition  string                 `json:"condition"`  // When to apply this rule
 	Parameters map[string]interface{} `json:"parameters"` // Rule-specific parameters
 	Priority   int                    `json:"priority"`   // Execution priority (1-10)
-}
-
-// ModeOverrides allows fine-tuning of mode behavior
-type ModeOverrides struct {
-	// Vendor preferences for each mode (ordered by preference)
-	VendorPreferences map[Mode][]string `json:"vendor_preferences,omitempty"`
-
-	// Cost limits for cost-saving mode
-	MaxCostPerRequest float64 `json:"max_cost_per_request,omitempty"`
-
-	// Latency limits for fast mode
-	MaxLatency time.Duration `json:"max_latency,omitempty"`
-
-	// Model preferences for sophisticated mode
-	SophisticatedModels []string `json:"sophisticated_models,omitempty"`
-
-	// Context preprocessing overrides
-	ContextPreprocessing map[Mode]*ContextPreprocessingConfig `json:"context_preprocessing,omitempty"`
 }
 
 // RetryPolicy defines how retries should be handled
@@ -267,30 +246,6 @@ func (b *BaseModeStrategy) OptimizeRequest(ctx *ModeContext) error {
 	return nil
 }
 
-// estimateRequestCost estimates the cost of a request based on token count and vendor cost
-func (b *BaseModeStrategy) estimateRequestCost(req *Request, costPer1KTokens float64) float64 {
-	// Rough estimation based on input length and max tokens
-	inputTokens := b.estimateInputTokens(req)
-	outputTokens := req.MaxTokens
-	if outputTokens == 0 {
-		outputTokens = 500 // Default estimate
-	}
-
-	totalTokens := inputTokens + outputTokens
-	return (float64(totalTokens) / 1000.0) * costPer1KTokens
-}
-
-// estimateInputTokens roughly estimates the number of tokens in the input
-func (b *BaseModeStrategy) estimateInputTokens(req *Request) int {
-	totalChars := 0
-	for _, msg := range req.Messages {
-		totalChars += len(msg.Content)
-	}
-
-	// Rough estimation: 1 token ≈ 4 characters
-	return totalChars / 4
-}
-
 // FastModeStrategy implements fast mode behavior
 type FastModeStrategy struct {
 	*BaseModeStrategy
@@ -305,17 +260,6 @@ func NewFastModeStrategy() *FastModeStrategy {
 
 // SelectVendor selects the best vendor for fast mode
 func (f *FastModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
-	// Check mode overrides first
-	if ctx.Config.ModeOverrides != nil {
-		if preferences, exists := ctx.Config.ModeOverrides.VendorPreferences[FastMode]; exists {
-			for _, vendorName := range preferences {
-				if vendor, exists := ctx.AvailableVendors[vendorName]; exists && vendor.IsAvailable(ctx.Context) {
-					return vendor, nil
-				}
-			}
-		}
-	}
-
 	// Fast mode intelligence: prioritize vendors known for speed
 	fastVendors := []struct {
 		name     string
@@ -385,17 +329,6 @@ func NewSophisticatedModeStrategy() *SophisticatedModeStrategy {
 
 // SelectVendor selects the best vendor for sophisticated mode
 func (s *SophisticatedModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
-	// Check mode overrides first
-	if ctx.Config.ModeOverrides != nil {
-		if preferences, exists := ctx.Config.ModeOverrides.VendorPreferences[SophisticatedMode]; exists {
-			for _, vendorName := range preferences {
-				if vendor, exists := ctx.AvailableVendors[vendorName]; exists && vendor.IsAvailable(ctx.Context) {
-					return vendor, nil
-				}
-			}
-		}
-	}
-
 	// Sophisticated mode intelligence: prioritize vendors with most capable models
 	sophisticatedVendors := []struct {
 		name     string
@@ -465,17 +398,6 @@ func NewCostSavingModeStrategy() *CostSavingModeStrategy {
 
 // SelectVendor selects the best vendor for cost-saving mode
 func (c *CostSavingModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
-	// Check mode overrides first
-	if ctx.Config.ModeOverrides != nil {
-		if preferences, exists := ctx.Config.ModeOverrides.VendorPreferences[CostSavingMode]; exists {
-			for _, vendorName := range preferences {
-				if vendor, exists := ctx.AvailableVendors[vendorName]; exists && vendor.IsAvailable(ctx.Context) {
-					return vendor, nil
-				}
-			}
-		}
-	}
-
 	// Cost-saving mode intelligence: prioritize cheapest vendors
 	costSavingVendors := []struct {
 		name     string
@@ -491,13 +413,6 @@ func (c *CostSavingModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, erro
 
 	for _, costVendor := range costSavingVendors {
 		if vendor, exists := ctx.AvailableVendors[costVendor.name]; exists && vendor.IsAvailable(ctx.Context) {
-			// Check cost limits if specified
-			if ctx.Config.ModeOverrides != nil && ctx.Config.ModeOverrides.MaxCostPerRequest > 0 {
-				estimatedCost := c.estimateRequestCost(ctx.Request, costVendor.cost)
-				if estimatedCost > ctx.Config.ModeOverrides.MaxCostPerRequest {
-					continue // Skip if too expensive
-				}
-			}
 			return vendor, nil
 		}
 	}
@@ -553,17 +468,6 @@ func NewAutoModeStrategy() *AutoModeStrategy {
 
 // SelectVendor selects the best vendor for auto mode
 func (a *AutoModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
-	// Check mode overrides first
-	if ctx.Config.ModeOverrides != nil {
-		if preferences, exists := ctx.Config.ModeOverrides.VendorPreferences[AutoMode]; exists {
-			for _, vendorName := range preferences {
-				if vendor, exists := ctx.AvailableVendors[vendorName]; exists && vendor.IsAvailable(ctx.Context) {
-					return vendor, nil
-				}
-			}
-		}
-	}
-
 	// Auto mode intelligence: balance speed, cost, and capability
 	balancedVendors := []struct {
 		name     string

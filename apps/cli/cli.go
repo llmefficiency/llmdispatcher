@@ -124,14 +124,6 @@ func runModeTest(mode models.Mode, testRequest *models.Request) *models.Dispatch
 			BackoffStrategy: models.ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		ModeOverrides: &models.ModeOverrides{
-			VendorPreferences: map[models.Mode][]string{
-				models.AutoMode:          {"openai", "anthropic", "google"},
-				models.FastMode:          {"local", "anthropic", "openai"},
-				models.SophisticatedMode: {"anthropic", "openai", "google"},
-				models.CostSavingMode:    {"local", "google", "openai", "anthropic"},
-			},
-		},
 	}
 
 	disp := dispatcher.NewWithConfig(config)
@@ -285,14 +277,6 @@ func main() {
 			BackoffStrategy: models.ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		ModeOverrides: &models.ModeOverrides{
-			VendorPreferences: map[models.Mode][]string{
-				models.AutoMode:          {"openai", "anthropic", "google"},
-				models.FastMode:          {"local", "anthropic", "openai"},
-				models.SophisticatedMode: {"anthropic", "openai", "google"},
-				models.CostSavingMode:    {"local", "google", "openai", "anthropic"},
-			},
-		},
 	}
 
 	disp := dispatcher.NewWithConfig(config)
@@ -425,9 +409,6 @@ func runLocalMode(modelPath, serverURL string) {
 		Timeout:       60 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,
-		ModeOverrides: &models.ModeOverrides{
-			MaxCostPerRequest: 0.0001, // Very low cost for local
-		},
 	}
 
 	disp := dispatcher.NewWithConfig(config)

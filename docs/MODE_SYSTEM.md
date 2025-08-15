@@ -118,24 +118,7 @@ config := &models.Config{
 }
 ```
 
-### Mode Overrides
 
-```go
-config.ModeOverrides = &models.ModeOverrides{
-    VendorPreferences: map[models.Mode][]string{
-        models.FastMode: {"local", "anthropic", "openai"},
-        models.SophisticatedMode: {"anthropic", "openai", "google"},
-    },
-    MaxCostPerRequest: 0.10,
-    MaxLatency: 5 * time.Second,
-    ContextPreprocessing: map[models.Mode]*models.ContextPreprocessingConfig{
-        models.FastMode: {
-            MaxContextLength: 1000,
-            EnableCompression: true,
-        },
-    },
-}
-```
 
 ## Usage Examples
 
@@ -302,6 +285,4 @@ The system supports pluggable vendor selection algorithms:
 ### Configuration Changes
 
 - `Mode` field now uses `models.Mode` type
-- Add `ContextPreprocessing` configuration
-- Use `ModeOverrides` for fine-tuning
-- Update vendor preferences in mode overrides 
+- Add `ContextPreprocessing` configuration 

@@ -66,9 +66,6 @@ config := &models.Config{
     Mode: models.SophisticatedMode,
     Timeout: 30 * time.Second,
     EnableLogging: true,
-    ModeOverrides: &models.ModeOverrides{
-        SophisticatedModels: []string{"claude-3-opus", "gpt-4", "gemini-pro"},
-    },
 }
 
 d := dispatcher.NewWithConfig(config)
@@ -82,9 +79,6 @@ config := &models.Config{
     Mode: models.CostSavingMode,
     Timeout: 20 * time.Second,
     EnableLogging: true,
-    ModeOverrides: &models.ModeOverrides{
-        MaxCostPerRequest: 0.01, // $0.01 per request
-    },
 }
 
 d := dispatcher.NewWithConfig(config)
@@ -105,42 +99,9 @@ d := dispatcher.NewWithConfig(config)
 
 ## Advanced Configuration
 
-### Custom Vendor Preferences
 
-You can override the default vendor preferences for each mode:
 
-```go
-config := &models.Config{
-    Mode: models.FastMode,
-    ModeOverrides: &models.ModeOverrides{
-        VendorPreferences: map[models.Mode][]string{
-            models.FastMode: {"local", "anthropic", "openai"},
-            models.SophisticatedMode: {"anthropic", "openai", "google"},
-            models.CostSavingMode: {"local", "azure", "google"},
-            models.AutoMode: {"local", "anthropic", "openai", "google"},
-        },
-    },
-}
-```
 
-### Mode-Specific Limits
-
-```go
-config := &models.Config{
-    Mode: models.CostSavingMode,
-    ModeOverrides: &models.ModeOverrides{
-        MaxCostPerRequest: 0.005, // $0.005 per request
-    },
-}
-
-// For fast mode with latency limits
-config := &models.Config{
-    Mode: models.FastMode,
-    ModeOverrides: &models.ModeOverrides{
-        MaxLatency: 2 * time.Second,
-    },
-}
-```
 
 ## Mode Selection Strategy
 
@@ -178,14 +139,9 @@ config := &models.Config{
     },
 }
 
-// New way - use mode overrides
+// New way - use modes
 config := &models.Config{
     Mode: models.AutoMode,
-    ModeOverrides: &models.ModeOverrides{
-        VendorPreferences: map[models.Mode][]string{
-            models.AutoMode: {"openai", "anthropic", "google"},
-        },
-    },
 }
 ```
 
@@ -203,9 +159,6 @@ config := &models.Config{
 // New way
 config := &models.Config{
     Mode: models.CostSavingMode,
-    ModeOverrides: &models.ModeOverrides{
-        MaxCostPerRequest: 0.01,
-    },
 }
 ```
 
@@ -215,7 +168,7 @@ config := &models.Config{
 2. **Use Fast Mode for real-time applications**: Chat interfaces, quick responses
 3. **Use Sophisticated Mode for complex tasks**: Analysis, reasoning, creative writing
 4. **Use Cost Saving Mode for high-volume usage**: Batch processing, testing
-5. **Customize with ModeOverrides**: Fine-tune behavior when needed
+5. **Choose the right mode**: Select the mode that best fits your use case
 6. **Monitor performance**: Use the built-in metrics to track vendor performance
 
 ## Error Handling

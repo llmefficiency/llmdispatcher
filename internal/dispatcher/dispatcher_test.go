@@ -307,11 +307,6 @@ func TestSend_WithModeStrategySuccess(t *testing.T) {
 func TestSend_WithModeStrategy(t *testing.T) {
 	config := &models.Config{
 		Mode: models.AutoMode,
-		ModeOverrides: &models.ModeOverrides{
-			VendorPreferences: map[models.Mode][]string{
-				models.AutoMode: {"openai", "anthropic"},
-			},
-		},
 	}
 
 	dispatcher := NewWithConfig(config)

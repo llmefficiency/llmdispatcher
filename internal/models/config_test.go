@@ -349,74 +349,13 @@ func TestVendorStats_Validation(t *testing.T) {
 	}
 }
 
-func TestModeOverrides_Validation(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  *ModeOverrides
-		wantErr bool
-	}{
-		{
-			name: "valid mode overrides",
-			config: &ModeOverrides{
-				VendorPreferences: map[Mode][]string{
-					FastMode:          {"local", "anthropic"},
-					SophisticatedMode: {"anthropic", "openai"},
-				},
-				MaxCostPerRequest:   0.01,
-				MaxLatency:          2 * time.Second,
-				SophisticatedModels: []string{"claude-3-opus", "gpt-4"},
-			},
-			wantErr: false,
-		},
-		{
-			name:    "nil mode overrides",
-			config:  nil,
-			wantErr: false, // nil is valid (optional)
-		},
-		{
-			name: "negative max cost",
-			config: &ModeOverrides{
-				MaxCostPerRequest: -0.01,
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// For now, we don't have validation for ModeOverrides
-			// This test is a placeholder for future validation logic
-			_ = tt
-		})
-	}
-}
-
 func TestConfig_AdvancedRouting(t *testing.T) {
 	config := &Config{
 		Mode: AutoMode,
-		ModeOverrides: &ModeOverrides{
-			VendorPreferences: map[Mode][]string{
-				AutoMode:          {"openai", "anthropic", "google"},
-				FastMode:          {"local", "anthropic"},
-				SophisticatedMode: {"anthropic", "openai"},
-				CostSavingMode:    {"local", "google", "openai"},
-			},
-			MaxCostPerRequest:   0.10,
-			MaxLatency:          5 * time.Second,
-			SophisticatedModels: []string{"claude-3-opus", "gpt-4", "gemini-pro"},
-		},
 	}
 
 	if config.Mode != AutoMode {
 		t.Errorf("Expected mode 'auto', got '%s'", config.Mode)
-	}
-
-	if config.ModeOverrides == nil {
-		t.Error("Expected mode overrides to be set")
-	}
-
-	if len(config.ModeOverrides.VendorPreferences) != 4 {
-		t.Errorf("Expected 4 mode preferences, got %d", len(config.ModeOverrides.VendorPreferences))
 	}
 }
 

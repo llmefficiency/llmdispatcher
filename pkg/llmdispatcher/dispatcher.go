@@ -29,21 +29,6 @@ func NewWithConfig(config *Config) *Dispatcher {
 		internalConfig.Timeout = config.Timeout
 		internalConfig.EnableLogging = config.EnableLogging
 		internalConfig.EnableMetrics = config.EnableMetrics
-
-		// Copy mode overrides if provided
-		if config.ModeOverrides != nil {
-			internalConfig.ModeOverrides = &models.ModeOverrides{
-				VendorPreferences:   make(map[models.Mode][]string),
-				MaxCostPerRequest:   config.ModeOverrides.MaxCostPerRequest,
-				MaxLatency:          config.ModeOverrides.MaxLatency,
-				SophisticatedModels: config.ModeOverrides.SophisticatedModels,
-			}
-
-			// Copy vendor preferences
-			for mode, preferences := range config.ModeOverrides.VendorPreferences {
-				internalConfig.ModeOverrides.VendorPreferences[models.Mode(mode)] = preferences
-			}
-		}
 	}
 
 	if config != nil && config.RetryPolicy != nil {

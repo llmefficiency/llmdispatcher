@@ -424,14 +424,6 @@ func TestNewWithConfig_Complex(t *testing.T) {
 			BackoffStrategy: ExponentialBackoff,
 			RetryableErrors: []string{"rate limit exceeded", "timeout"},
 		},
-		ModeOverrides: &ModeOverrides{
-			VendorPreferences: map[Mode][]string{
-				AutoMode:          {"openai", "anthropic", "google"},
-				FastMode:          {"local", "anthropic", "openai"},
-				SophisticatedMode: {"anthropic", "openai", "google"},
-				CostSavingMode:    {"local", "google", "openai", "anthropic"},
-			},
-		},
 	}
 
 	dispatcher := NewWithConfig(config)
