@@ -398,7 +398,7 @@ func TestAzureOpenAI_SendStreamingRequest_HTTPError(t *testing.T) {
 func TestAzureOpenAI_SendStreamingRequest_NetworkError(t *testing.T) {
 	vendor := NewAzureOpenAI(&models.VendorConfig{
 		APIKey:  "test-key",
-		BaseURL: "http://invalid-url-that-does-not-exist.com",
+		BaseURL: "http://127.0.0.1:1", // Invalid port to trigger connection error
 		Timeout: 1 * time.Second,
 	})
 
@@ -415,8 +415,9 @@ func TestAzureOpenAI_SendStreamingRequest_NetworkError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error from SendStreamingRequest")
 	}
-	if !strings.Contains(err.Error(), "HTTP error 404") {
-		t.Errorf("Expected HTTP 404 error, got: %v", err)
+	// Check for network connection error instead of HTTP status
+	if !strings.Contains(err.Error(), "connection refused") && !strings.Contains(err.Error(), "HTTP request failed") {
+		t.Errorf("Expected network connection error, got: %v", err)
 	}
 }
 
@@ -587,8 +588,8 @@ func TestAzureOpenAI_SendRequest_NetworkError(t *testing.T) {
 	// Create vendor with invalid URL
 	vendor := NewAzureOpenAI(&models.VendorConfig{
 		APIKey:  "test-key",
-		BaseURL: "http://invalid-url-that-does-not-exist.com",
-		Timeout: 1 * time.Second, // Short timeout for faster test
+		BaseURL: "http://127.0.0.1:1", // Invalid port to trigger connection error
+		Timeout: 1 * time.Second,      // Short timeout for faster test
 	})
 
 	request := &models.Request{
@@ -604,6 +605,10 @@ func TestAzureOpenAI_SendRequest_NetworkError(t *testing.T) {
 	_, err := vendor.SendRequest(context.Background(), request)
 	if err == nil {
 		t.Error("Expected error, got nil")
+	}
+	// Check for network connection error
+	if !strings.Contains(err.Error(), "connection refused") && !strings.Contains(err.Error(), "HTTP request failed") {
+		t.Errorf("Expected network connection error, got: %v", err)
 	}
 }
 

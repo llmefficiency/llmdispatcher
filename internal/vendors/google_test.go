@@ -493,8 +493,8 @@ func TestGoogle_SendRequest_NetworkError(t *testing.T) {
 	// Create vendor with invalid URL
 	vendor := NewGoogle(&models.VendorConfig{
 		APIKey:  "test-key",
-		BaseURL: "http://invalid-url-that-does-not-exist.com",
-		Timeout: 1 * time.Second, // Short timeout for faster test
+		BaseURL: "http://127.0.0.1:1", // Invalid port to trigger connection error
+		Timeout: 1 * time.Second,      // Short timeout for faster test
 	})
 
 	request := &models.Request{
@@ -510,6 +510,10 @@ func TestGoogle_SendRequest_NetworkError(t *testing.T) {
 	_, err := vendor.SendRequest(context.Background(), request)
 	if err == nil {
 		t.Error("Expected error, got nil")
+	}
+	// Check for network connection error
+	if !strings.Contains(err.Error(), "connection refused") && !strings.Contains(err.Error(), "HTTP request failed") {
+		t.Errorf("Expected network connection error, got: %v", err)
 	}
 }
 

@@ -365,7 +365,7 @@ func TestAnthropic_SendStreamingRequest_HTTPError(t *testing.T) {
 func TestAnthropic_SendStreamingRequest_NetworkError(t *testing.T) {
 	vendor := NewAnthropic(&models.VendorConfig{
 		APIKey:  "test-key",
-		BaseURL: "http://invalid-url-that-does-not-exist.com",
+		BaseURL: "http://127.0.0.1:1", // Invalid port to trigger connection error
 		Timeout: 1 * time.Second,
 	})
 
@@ -382,8 +382,9 @@ func TestAnthropic_SendStreamingRequest_NetworkError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error from SendStreamingRequest")
 	}
-	if !strings.Contains(err.Error(), "HTTP error 404") {
-		t.Errorf("Expected HTTP 404 error, got: %v", err)
+	// Check for network connection error instead of HTTP status
+	if !strings.Contains(err.Error(), "connection refused") && !strings.Contains(err.Error(), "HTTP request failed") {
+		t.Errorf("Expected network connection error, got: %v", err)
 	}
 }
 
