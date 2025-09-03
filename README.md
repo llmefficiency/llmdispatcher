@@ -4,7 +4,7 @@
 
 **Intelligent LLM Request Routing & Dispatching**
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen)](https://github.com/llmefficiency/llmdispatcher/actions)
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen)](https://github.com/llmefficiency/llmdispatcher/actions)
@@ -13,7 +13,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintenance-Active-brightgreen)](https://github.com/llmefficiency/llmdispatcher)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen)](https://github.com/llmefficiency/llmdispatcher/pulls)
 [![Issues](https://img.shields.io/badge/Issues-Welcome-orange)](https://github.com/llmefficiency/llmdispatcher/issues)
-[![Release](https://img.shields.io/badge/Release-v0.1.0-blue)](https://github.com/llmefficiency/llmdispatcher/releases)
+[![Release](https://img.shields.io/badge/Release-v0.3.0-blue)](https://github.com/llmefficiency/llmdispatcher/releases)
 [![Last Commit](https://img.shields.io/badge/Last%20Commit-Active-brightgreen)](https://github.com/llmefficiency/llmdispatcher/commits/main)
 [![Contributors](https://img.shields.io/badge/Contributors-Welcome-orange)](https://github.com/llmefficiency/llmdispatcher/graphs/contributors)
 [![Stars](https://img.shields.io/badge/Stars-⭐-yellow)](https://github.com/llmefficiency/llmdispatcher/stargazers)
@@ -44,9 +44,12 @@
 
 ## 🔹 Quickstart Installation
 
-### Method 1: Go Install (Recommended)
+### Method 1: From Source (Recommended)
 ```bash
-go install github.com/llmefficiency/llmdispatcher/cmd/example@latest
+git clone https://github.com/llmefficiency/llmdispatcher.git
+cd llmdispatcher
+go mod download
+make build
 ```
 
 ### Method 2: Docker
@@ -58,86 +61,107 @@ docker build -t llmdispatcher .
 docker run -e OPENAI_API_KEY=your-key -e ANTHROPIC_API_KEY=your-key llmdispatcher
 ```
 
-### Method 3: From Source
+### Method 3: Using Makefile
 ```bash
 git clone https://github.com/llmefficiency/llmdispatcher.git
 cd llmdispatcher
-go mod download
-go run cmd/example/cli.go
+make setup  # Sets up dependencies and .env file
+make run    # Builds and runs the CLI application
 ```
 
 ## 🔹 Usage Example
 
-### Basic Usage (5 lines of code)
+### Basic Usage (CLI)
+
+The simplest way to get started is using the CLI application:
+
+```bash
+# Set up your API keys
+cp env.example .env
+# Edit .env with your API keys
+
+# Run with different modes
+go run apps/cli/cli.go --vendor                          # Use cloud vendors
+go run apps/cli/cli.go --vendor --vendor-override openai # Force OpenAI
+go run apps/cli/cli.go --local                           # Use local models (Ollama)
+go run apps/cli/cli.go --compare                         # Compare all modes
+```
+
+### Basic Usage (Go API)
 
 ```go
 package main
 
 import (
     "context"
-    "fmt"
     "log"
-    "os"
-    "github.com/llmefficiency/llmdispatcher/pkg/llmdispatcher"
+    "github.com/llmefficiency/llmdispatcher/internal/dispatcher"
+    "github.com/llmefficiency/llmdispatcher/internal/models"
+    "github.com/llmefficiency/llmdispatcher/internal/vendors"
 )
 
 func main() {
     // 1. Create dispatcher
-    dispatcher := llmdispatcher.New()
+    disp := dispatcher.New()
     
-    // 2. Register vendors
-    openai := llmdispatcher.NewOpenAIVendor(&llmdispatcher.VendorConfig{
+    // 2. Register a vendor
+    config := &models.VendorConfig{
         APIKey: os.Getenv("OPENAI_API_KEY"),
-    })
-    dispatcher.RegisterVendor(openai)
+    }
+    vendor := vendors.NewOpenAI(config)
+    disp.RegisterVendor(vendor)
     
-    // 3. Send request (automatic routing & fallback)
-    response, err := dispatcher.Send(context.Background(), &llmdispatcher.Request{
+    // 3. Send request
+    req := &models.Request{
         Model: "gpt-3.5-turbo",
-        Messages: []llmdispatcher.Message{{Role: "user", Content: "Hello!"}},
-    })
+        Messages: []models.Message{{Role: "user", Content: "Hello!"}},
+    }
+    
+    response, err := disp.Send(context.Background(), req)
     if err != nil {
         log.Fatal(err)
     }
     
-    fmt.Printf("Response: %s\n", response.Content)
+    log.Printf("Response: %s\n", response.Content)
 }
 ```
 
-### Advanced Usage with Cost Optimization
+### Advanced Usage with Mode-Based Routing
 
 ```go
-// Configure intelligent routing
-config := &llmdispatcher.Config{
-    DefaultVendor: "openai",
-    FallbackVendor: "anthropic",
-    CostOptimization: &llmdispatcher.CostOptimization{
-        Enabled: true,
-        MaxCost: 0.10,
-        VendorCosts: map[string]float64{
-            "openai":   0.002, // $0.002 per 1K tokens
-            "anthropic": 0.003, // $0.003 per 1K tokens
-            "google":    0.001, // $0.001 per 1K tokens
-        },
-    },
-    RetryPolicy: &llmdispatcher.RetryPolicy{
-        MaxRetries: 3,
-        BackoffStrategy: llmdispatcher.ExponentialBackoff,
+// Configure dispatcher with mode-based routing
+config := &models.Config{
+    Mode:          models.AutoMode, // or FastMode, SophisticatedMode, CostSavingMode
+    Timeout:       30 * time.Second,
+    EnableLogging: true,
+    EnableMetrics: true,
+    RetryPolicy: &models.RetryPolicy{
+        MaxRetries:      3,
+        BackoffStrategy: models.ExponentialBackoff,
+        RetryableErrors: []string{"rate limit exceeded", "timeout"},
     },
 }
 
-dispatcher := llmdispatcher.NewWithConfig(config)
+disp := dispatcher.NewWithConfig(config)
 
 // Register multiple vendors
-dispatcher.RegisterVendor(llmdispatcher.NewOpenAIVendor(&llmdispatcher.VendorConfig{
+openaiVendor := vendors.NewOpenAI(&models.VendorConfig{
     APIKey: os.Getenv("OPENAI_API_KEY"),
-}))
-dispatcher.RegisterVendor(llmdispatcher.NewAnthropicVendor(&llmdispatcher.VendorConfig{
-    APIKey: os.Getenv("ANTHROPIC_API_KEY"),
-}))
+})
+disp.RegisterVendor(openaiVendor)
 
-// Send request - automatically routes to cheapest available vendor
-response, err := dispatcher.Send(context.Background(), request)
+anthropicVendor := vendors.NewAnthropic(&models.VendorConfig{
+    APIKey: os.Getenv("ANTHROPIC_API_KEY"),
+})
+disp.RegisterVendor(anthropicVendor)
+
+// Send request - automatically routes based on mode strategy
+req := &models.Request{
+    Model: "gpt-3.5-turbo",
+    Messages: []models.Message{{Role: "user", Content: "Hello!"}},
+    Mode: "fast", // Override mode for this request
+}
+response, err := disp.Send(context.Background(), req)
 ```
 
 ### Design Choices
@@ -147,11 +171,11 @@ response, err := dispatcher.Send(context.Background(), request)
 - Consistent request/response format
 - Automatic vendor-specific translation
 
-**2. Intelligent Routing Engine**
-- Model-based routing (GPT-4 → OpenAI, Claude → Anthropic)
-- Cost optimization (route to cheapest vendor)
-- Latency optimization (route to fastest vendor)
-- Custom routing rules (user-defined logic)
+**2. Mode-Based Routing Engine**
+- Mode-based routing (FastMode, SophisticatedMode, CostSavingMode, AutoMode)
+- Model pattern matching for vendor selection
+- Basic cost awareness (built into mode strategies)
+- ⚠️ **Note**: Advanced cost and latency optimization features are planned but not yet fully implemented
 
 **3. Resilience & Reliability**
 - Automatic retry with exponential backoff
@@ -166,10 +190,10 @@ response, err := dispatcher.Send(context.Background(), request)
 - Minimal memory footprint
 
 **5. Observability & Monitoring**
-- Comprehensive statistics tracking
+- Basic statistics tracking
 - Vendor performance metrics
-- Cost and latency monitoring
 - Request success/failure rates
+- ⚠️ **Note**: Detailed cost tracking and latency monitoring are planned features
 
 ## 🔹 Live Demo
 
@@ -184,7 +208,6 @@ cp env.example .env
 
 # Start the demo web app
 make webservice
-# Or run directly: go run apps/server/main.go
 
 # Open http://localhost:8080 in your browser
 ```
@@ -208,54 +231,56 @@ make webservice
 
 ```bash
 # CLI demo with different modes:
-# Vendor mode with default vendor (openai)
+# Vendor mode with automatic vendor selection
 go run apps/cli/cli.go --vendor
 
 # Vendor mode with specific vendor override
 go run apps/cli/cli.go --vendor --vendor-override anthropic
+go run apps/cli/cli.go --vendor --vendor-override openai
 
-# Local mode with Ollama
+# Local mode with Ollama (default model: llama2:7b)
 go run apps/cli/cli.go --local
 
-# Local mode with custom model
-go run apps/cli/cli.go --local --model llama2:13b
+# Local mode with custom model and server
+go run apps/cli/cli.go --local --model llama2:13b --server http://localhost:11434
 
-# Mode comparison test
+# Mode comparison test across all optimization modes
 go run apps/cli/cli.go --compare
 ```
 
 ## Features
 
 ### 🚀 Core Features
-- **Multi-vendor support**: OpenAI, Anthropic, Google, Azure OpenAI
-- **Intelligent routing**: Automatic vendor selection based on model, cost, latency
+- **Multi-vendor support**: OpenAI, Anthropic, Google, Azure OpenAI, Local (Ollama)
+- **Mode-based routing**: Automatic vendor selection based on optimization modes (Fast, Sophisticated, Cost-Saving, Auto)
 - **Automatic fallback**: Seamless failover when vendors are unavailable
 - **Streaming support**: Real-time responses with vendor-agnostic interface
-- **Cost optimization**: Route to cheapest vendor for your use case
+- **Basic cost awareness**: Built into mode strategies (advanced cost optimization planned)
 - **Advanced retry**: Configurable retry policies with exponential backoff
 
 ### 📊 Monitoring & Analytics
-- **Unified metrics**: Single dashboard for all vendor performance
-- **Cost tracking**: Monitor total and per-request costs
-- **Latency monitoring**: Track response times across vendors
-- **Success rates**: Monitor vendor reliability and uptime
-- **Usage statistics**: Detailed request and token usage
+- **Basic metrics**: Request counts, success/failure rates
+- **Vendor performance**: Track which vendors are used
+- **Basic statistics**: Total requests, response times
+- ⚠️ **Planned**: Advanced cost tracking, detailed latency monitoring, usage analytics
 
-### 🔧 Advanced Configuration
-- **Custom routing rules**: Route by model, tokens, temperature, user
-- **Cost optimization**: Set budgets and vendor cost preferences
-- **Latency optimization**: Configure performance-based routing
-- **Rate limiting**: Built-in rate limit handling and backoff
+### 🔧 Configuration
+- **Mode-based routing**: Built-in optimization modes (Fast, Sophisticated, Cost-Saving, Auto)
+- **Basic routing rules**: Route by model patterns, token limits, temperature
+- **Retry configuration**: Configurable retry policies with exponential backoff
+- **Vendor management**: Easy vendor registration and configuration
 - **Security**: API key management and secure configuration
+- ⚠️ **Planned**: Advanced routing rules, rate limiting, budget controls
 
 ## Supported Vendors
 
-| Vendor | Models | Features | Cost (per 1K tokens) |
-|--------|--------|----------|----------------------|
-| **OpenAI** | GPT-4, GPT-3.5-turbo, GPT-4o | Streaming, Rate limiting | $0.002-0.03 |
-| **Anthropic** | Claude-3-opus, Claude-3-sonnet | Large context (200K) | $0.003-0.015 |
-| **Google** | Gemini-1.5-pro, Gemini-pro | Massive context (1M) | $0.001-0.007 |
-| **Azure OpenAI** | GPT-4, GPT-3.5-turbo | Enterprise features | $0.002-0.03 |
+| Vendor | Models | Features | Status |
+|--------|--------|----------|--------|
+| **OpenAI** | GPT-4, GPT-3.5-turbo, GPT-4o, GPT-4o-mini | ✅ Streaming, Rate limiting | ✅ Implemented |
+| **Anthropic** | Claude-3-opus, Claude-3-sonnet, Claude-3-haiku | ✅ Large context, Streaming | ✅ Implemented |
+| **Google** | Gemini-1.5-pro, Gemini-1.5-flash, Gemini-pro | ✅ Massive context, Streaming | ✅ Implemented |
+| **Azure OpenAI** | GPT-4, GPT-3.5-turbo, GPT-4-turbo | ✅ Enterprise deployment | ✅ Implemented |
+| **Local (Ollama)** | llama2, mistral, custom models | ✅ Local inference, Free | ✅ Implemented |
 
 ## Quick Examples
 
@@ -298,12 +323,12 @@ The example application supports multiple modes for testing different configurat
 Test with cloud vendors (OpenAI, Anthropic, etc.):
 
 ```bash
-# Use default vendor (openai)
-go run cmd/example/cli.go --vendor
+# Use automatic vendor selection
+go run apps/cli/cli.go --vendor
 
 # Use specific vendor override
-go run cmd/example/cli.go --vendor --vendor-override anthropic
-go run cmd/example/cli.go --vendor --vendor-override openai
+go run apps/cli/cli.go --vendor --vendor-override anthropic
+go run apps/cli/cli.go --vendor --vendor-override openai
 ```
 
 ### Local Mode
@@ -311,19 +336,19 @@ Test with local models using Ollama:
 
 ```bash
 # Use default local model (llama2:7b)
-go run cmd/example/cli.go --local
+go run apps/cli/cli.go --local
 
 # Use custom model
-go run cmd/example/cli.go --local --model llama2:13b
-go run cmd/example/cli.go --local --model mistral:7b
+go run apps/cli/cli.go --local --model llama2:13b
+go run apps/cli/cli.go --local --model mistral:7b
 
 # Use custom Ollama server
-go run cmd/example/cli.go --local --server http://localhost:11434
+go run apps/cli/cli.go --local --server http://localhost:11434
 ```
 
 ### Available Options
 ```bash
-go run cmd/example/cli.go --help
+go run apps/cli/cli.go --help
 ```
 
 **Options:**
@@ -346,14 +371,14 @@ export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com/"
 
 ### 2. Or use .env file
 ```bash
-cp cmd/example/env.example .env
+cp env.example .env
 # Edit .env with your API keys
 ```
 
 ### 3. Run the example
 ```bash
-# Default mode (all vendors)
-go run cmd/example/cli.go
+# Default mode (all vendors, automatic mode)
+go run apps/cli/cli.go
 
 # Or use specific modes as shown above
 ```
