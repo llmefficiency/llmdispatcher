@@ -60,12 +60,12 @@ func printDetailedStats(stats *models.DispatcherStats) {
 	}
 }
 
-// printStrategyComparison prints a comparison of stats across different strategies
+// printStrategyComparison prints a clean comparison of key metrics across strategies
 func printStrategyComparison(strategyStats map[models.Strategy]*models.DispatcherStats) {
 	fmt.Printf("\n🎯 STRATEGY COMPARISON:\n")
-	fmt.Printf("┌─────────────────────────────────────────────────────────────────────────────────┐\n")
-	fmt.Printf("│ Strategy       │ Requests │ Successes │ Failures │ Avg Latency │ Success Rate │\n")
-	fmt.Printf("├─────────────────────────────────────────────────────────────────────────────────┤\n")
+	fmt.Printf("┌────────────────────────────────────────────────────────────────────┐\n")
+	fmt.Printf("│ Strategy   │ Latency     │ Cost/Request │ Success Rate │ Vendor │\n")
+	fmt.Printf("├────────────────────────────────────────────────────────────────────┤\n")
 
 	for strategy, stats := range strategyStats {
 		successRate := 0.0
@@ -73,15 +73,28 @@ func printStrategyComparison(strategyStats map[models.Strategy]*models.Dispatche
 			successRate = float64(stats.SuccessfulRequests) / float64(stats.TotalRequests) * 100
 		}
 
-		fmt.Printf("│ %-14s │ %-8d │ %-9d │ %-8d │ %-11s │ %-11.1f%% │\n",
+		// Get the primary vendor used
+		primaryVendor := "none"
+		if len(stats.VendorStats) > 0 {
+			for vendor := range stats.VendorStats {
+				primaryVendor = vendor
+				break // Get first (and likely only) vendor
+			}
+		}
+
+		costPerRequest := 0.0
+		if stats.TotalRequests > 0 && stats.TotalCost > 0 {
+			costPerRequest = stats.TotalCost / float64(stats.TotalRequests)
+		}
+
+		fmt.Printf("│ %-10s │ %-11s │ $%-10.4f │ %-11.0f%% │ %-6s │\n",
 			string(strategy),
-			stats.TotalRequests,
-			stats.SuccessfulRequests,
-			stats.FailedRequests,
 			stats.AverageLatency.String(),
-			successRate)
+			costPerRequest,
+			successRate,
+			primaryVendor)
 	}
-	fmt.Printf("└─────────────────────────────────────────────────────────────────────────────────┘\n")
+	fmt.Printf("└────────────────────────────────────────────────────────────────────┘\n")
 }
 
 // loadEnv loads environment variables from .env file
@@ -111,8 +124,51 @@ func loadEnv(filename string) error {
 	return scanner.Err()
 }
 
+// createVendorConfig creates a vendor configuration with standard settings
+func createVendorConfig(apiKey, baseURL string, timeout time.Duration) *models.VendorConfig {
+	return &models.VendorConfig{
+		APIKey:  apiKey,
+		BaseURL: baseURL,
+		Timeout: timeout,
+		Headers: map[string]string{
+			"User-Agent": "llmdispatcher/1.0",
+		},
+	}
+}
+
+// registerVendors registers all available vendors to the dispatcher
+func registerVendors(disp *dispatcher.Dispatcher) {
+	openaiAPIKey := os.Getenv("OPENAI_API_KEY")
+	anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	googleAPIKey := os.Getenv("GOOGLE_API_KEY")
+
+	if openaiAPIKey != "" {
+		config := createVendorConfig(openaiAPIKey, "https://api.openai.com/v1", 30*time.Second)
+		vendor := vendors.NewOpenAI(config)
+		if err := disp.RegisterVendor(vendor); err != nil {
+			log.Printf("⚠️  Failed to register OpenAI vendor: %v", err)
+		}
+	}
+
+	if anthropicAPIKey != "" {
+		config := createVendorConfig(anthropicAPIKey, "https://api.anthropic.com", 30*time.Second)
+		vendor := vendors.NewAnthropic(config)
+		if err := disp.RegisterVendor(vendor); err != nil {
+			log.Printf("⚠️  Failed to register Anthropic vendor: %v", err)
+		}
+	}
+
+	if googleAPIKey != "" {
+		config := createVendorConfig(googleAPIKey, "https://generativelanguage.googleapis.com", 30*time.Second)
+		vendor := vendors.NewGoogle(config)
+		if err := disp.RegisterVendor(vendor); err != nil {
+			log.Printf("⚠️  Failed to register Google vendor: %v", err)
+		}
+	}
+}
+
 // runStrategyTest runs a test with a specific strategy and returns the stats
-func runStrategyTest(strategy models.Strategy, testRequest *models.Request) *models.DispatcherStats {
+func runStrategyTest(strategy models.Strategy, baseMessages []models.Message) *models.DispatcherStats {
 	// Create dispatcher with strategy-specific configuration
 	config := &models.Config{
 		Strategy:      strategy,
@@ -127,59 +183,34 @@ func runStrategyTest(strategy models.Strategy, testRequest *models.Request) *mod
 	}
 
 	disp := dispatcher.NewWithConfig(config)
+	registerVendors(disp)
 
-	// Register vendors based on available API keys
-	openaiAPIKey := os.Getenv("OPENAI_API_KEY")
-	anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
-	googleAPIKey := os.Getenv("GOOGLE_API_KEY")
+	// We need to determine which vendor would be selected for this strategy
+	// For now, we'll try different models and see which one works
+	modelNames := []string{"gpt-3.5-turbo", "claude-3-haiku-20240307", "gemini-pro"}
 
-	if openaiAPIKey != "" {
-		openaiConfig := &models.VendorConfig{
-			APIKey:  openaiAPIKey,
-			Timeout: 30 * time.Second,
-			Headers: map[string]string{
-				"User-Agent": "llmdispatcher/1.0",
-			},
+	var lastErr error
+	for _, modelName := range modelNames {
+		testRequest := &models.Request{
+			Model:       modelName,
+			Messages:    baseMessages,
+			Temperature: 0.7,
+			MaxTokens:   100,
 		}
-		openaiVendor := vendors.NewOpenAI(openaiConfig)
-		if err := disp.RegisterVendor(openaiVendor); err != nil {
-			log.Printf("⚠️  Failed to register OpenAI vendor: %v", err)
+
+		ctx := context.Background()
+		_, err := disp.Send(ctx, testRequest)
+		if err != nil {
+			lastErr = err
+			continue // Try next model
+		} else {
+			// Success! Break out of loop
+			break
 		}
 	}
 
-	if anthropicAPIKey != "" {
-		anthropicConfig := &models.VendorConfig{
-			APIKey:  anthropicAPIKey,
-			Timeout: 30 * time.Second,
-			Headers: map[string]string{
-				"User-Agent": "llmdispatcher/1.0",
-			},
-		}
-		anthropicVendor := vendors.NewAnthropic(anthropicConfig)
-		if err := disp.RegisterVendor(anthropicVendor); err != nil {
-			log.Printf("⚠️  Failed to register Anthropic vendor: %v", err)
-		}
-	}
-
-	if googleAPIKey != "" {
-		googleConfig := &models.VendorConfig{
-			APIKey:  googleAPIKey,
-			Timeout: 30 * time.Second,
-			Headers: map[string]string{
-				"User-Agent": "llmdispatcher/1.0",
-			},
-		}
-		googleVendor := vendors.NewGoogle(googleConfig)
-		if err := disp.RegisterVendor(googleVendor); err != nil {
-			log.Printf("⚠️  Failed to register Google vendor: %v", err)
-		}
-	}
-
-	// Send the test request
-	ctx := context.Background()
-	_, err := disp.Send(ctx, testRequest)
-	if err != nil {
-		log.Printf("⚠️  Strategy %s test failed: %v", strategy, err)
+	if lastErr != nil {
+		log.Printf("⚠️  Strategy %s test failed with all models: %v", strategy, lastErr)
 	}
 
 	return disp.GetStats()
@@ -188,18 +219,14 @@ func runStrategyTest(strategy models.Strategy, testRequest *models.Request) *mod
 // runStrategyComparison runs tests across all strategies and shows comparison
 func runStrategyComparison() {
 	fmt.Printf("\n🚀 Running Strategy Comparison Test\n")
-	fmt.Printf("Testing all strategies with the same request...\n")
+	fmt.Printf("Testing all strategies with vendor-appropriate models...\n")
 
-	testReq := &models.Request{
-		Model: "gpt-3.5-turbo",
-		Messages: []models.Message{
-			{
-				Role:    "user",
-				Content: "Hello! Can you tell me a short joke?",
-			},
+	// We'll use a generic request that gets modified per vendor
+	baseMessages := []models.Message{
+		{
+			Role:    "user",
+			Content: "Hello! Can you tell me a short joke?",
 		},
-		Temperature: 0.7,
-		MaxTokens:   100,
 	}
 
 	strategies := []models.Strategy{
@@ -212,19 +239,13 @@ func runStrategyComparison() {
 	strategyStats := make(map[models.Strategy]*models.DispatcherStats)
 
 	for _, strategy := range strategies {
-		fmt.Printf("\n🔄 Testing %s strategy...\n", strategy)
-		stats := runStrategyTest(strategy, testReq)
+		fmt.Printf("Testing %s strategy...\n", strategy)
+		stats := runStrategyTest(strategy, baseMessages)
 		strategyStats[strategy] = stats
 	}
 
 	// Print the comparison
 	printStrategyComparison(strategyStats)
-
-	// Print detailed stats for each strategy
-	for strategy, stats := range strategyStats {
-		fmt.Printf("\n📊 Detailed Stats for %s Strategy:\n", strategy)
-		printDetailedStats(stats)
-	}
 }
 
 func main() {
@@ -261,9 +282,6 @@ func main() {
 	}
 
 	// Get API keys from environment variables
-	openaiAPIKey := os.Getenv("OPENAI_API_KEY")
-	anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
-	googleAPIKey := os.Getenv("GOOGLE_API_KEY")
 	azureOpenAIAPIKey := os.Getenv("AZURE_OPENAI_API_KEY")
 
 	// Create dispatcher with configuration
@@ -280,63 +298,23 @@ func main() {
 	}
 
 	disp := dispatcher.NewWithConfig(config)
+	registerVendors(disp)
 
-	// Register OpenAI vendor (if API key is available)
-	if openaiAPIKey != "" {
-		openaiConfig := &models.VendorConfig{
-			APIKey:  openaiAPIKey,
-			Timeout: 30 * time.Second,
-			Headers: map[string]string{
-				"User-Agent": "llmdispatcher/1.0",
-			},
-		}
-
-		openaiVendor := vendors.NewOpenAI(openaiConfig)
-		if err := disp.RegisterVendor(openaiVendor); err != nil {
-			log.Printf("Failed to register OpenAI vendor: %v", err)
-		} else {
-			log.Println("✅ Registered OpenAI vendor")
-		}
+	// Log registered vendors
+	if os.Getenv("OPENAI_API_KEY") != "" {
+		log.Println("✅ Registered OpenAI vendor")
 	} else {
 		log.Println("⚠️  OPENAI_API_KEY not set, skipping OpenAI vendor")
 	}
 
-	// Register Anthropic vendor (when implemented)
-	if anthropicAPIKey != "" {
-		anthropicConfig := &models.VendorConfig{
-			APIKey:  anthropicAPIKey,
-			Timeout: 30 * time.Second,
-			Headers: map[string]string{
-				"User-Agent": "llmdispatcher/1.0",
-			},
-		}
-
-		anthropicVendor := vendors.NewAnthropic(anthropicConfig)
-		if err := disp.RegisterVendor(anthropicVendor); err != nil {
-			log.Printf("Failed to register Anthropic vendor: %v", err)
-		} else {
-			log.Println("✅ Registered Anthropic vendor")
-		}
+	if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		log.Println("✅ Registered Anthropic vendor")
 	} else {
 		log.Println("⚠️  ANTHROPIC_API_KEY not set")
 	}
 
-	// Register Google vendor (when implemented)
-	if googleAPIKey != "" {
-		googleConfig := &models.VendorConfig{
-			APIKey:  googleAPIKey,
-			Timeout: 30 * time.Second,
-			Headers: map[string]string{
-				"User-Agent": "llmdispatcher/1.0",
-			},
-		}
-
-		googleVendor := vendors.NewGoogle(googleConfig)
-		if err := disp.RegisterVendor(googleVendor); err != nil {
-			log.Printf("Failed to register Google vendor: %v", err)
-		} else {
-			log.Println("✅ Registered Google vendor")
-		}
+	if os.Getenv("GOOGLE_API_KEY") != "" {
+		log.Println("✅ Registered Google vendor")
 	} else {
 		log.Println("⚠️  GOOGLE_API_KEY not set")
 	}
@@ -574,45 +552,25 @@ func runVendorMode(vendorOverride, modelPath, serverURL string) {
 	// Register vendor based on target
 	switch targetVendor {
 	case "anthropic":
-		// Register Anthropic vendor
 		anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
 		if anthropicAPIKey == "" {
 			log.Fatal("ANTHROPIC_API_KEY environment variable is required for Anthropic vendor")
 		}
-
-		anthropicConfig := &models.VendorConfig{
-			APIKey:  anthropicAPIKey,
-			BaseURL: "https://api.anthropic.com",
-			Timeout: 120 * time.Second, // Longer timeout for streaming
-			Headers: map[string]string{
-				"User-Agent": "llmdispatcher/1.0",
-			},
-		}
-
-		anthropicVendor := vendors.NewAnthropic(anthropicConfig)
-		if err := disp.RegisterVendor(anthropicVendor); err != nil {
+		config := createVendorConfig(anthropicAPIKey, "https://api.anthropic.com", 120*time.Second)
+		vendor := vendors.NewAnthropic(config)
+		if err := disp.RegisterVendor(vendor); err != nil {
 			log.Fatalf("Failed to register Anthropic vendor: %v", err)
 		}
 		log.Println("✅ Anthropic vendor registered successfully")
 
 	case "openai":
-		// Register OpenAI vendor
 		openaiAPIKey := os.Getenv("OPENAI_API_KEY")
 		if openaiAPIKey == "" {
 			log.Fatal("OPENAI_API_KEY environment variable is required for OpenAI vendor")
 		}
-
-		openaiConfig := &models.VendorConfig{
-			APIKey:  openaiAPIKey,
-			BaseURL: "https://api.openai.com/v1",
-			Timeout: 120 * time.Second, // Longer timeout for streaming
-			Headers: map[string]string{
-				"User-Agent": "llmdispatcher/1.0",
-			},
-		}
-
-		openaiVendor := vendors.NewOpenAI(openaiConfig)
-		if err := disp.RegisterVendor(openaiVendor); err != nil {
+		config := createVendorConfig(openaiAPIKey, "https://api.openai.com/v1", 120*time.Second)
+		vendor := vendors.NewOpenAI(config)
+		if err := disp.RegisterVendor(vendor); err != nil {
 			log.Fatalf("Failed to register OpenAI vendor: %v", err)
 		}
 		log.Println("✅ OpenAI vendor registered successfully")
