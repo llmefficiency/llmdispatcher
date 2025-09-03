@@ -7,7 +7,7 @@ import (
 // ContextPreprocessor defines the interface for context preprocessing
 type ContextPreprocessor interface {
 	// Preprocess applies preprocessing to the context
-	Preprocess(ctx *ModeContext) error
+	Preprocess(ctx *StrategyContext) error
 
 	// Name returns the preprocessor name
 	Name() string
@@ -55,7 +55,7 @@ func NewContextLengthPreprocessor(maxLength int) *ContextLengthPreprocessor {
 }
 
 // Preprocess truncates context if it exceeds maximum length
-func (c *ContextLengthPreprocessor) Preprocess(ctx *ModeContext) error {
+func (c *ContextLengthPreprocessor) Preprocess(ctx *StrategyContext) error {
 	// TODO: Implement context length preprocessing
 	// - Count tokens in context
 	// - Truncate if exceeds maxLength
@@ -99,7 +99,7 @@ func NewContextCompressionPreprocessor(compressionRatio float64) *ContextCompres
 }
 
 // Preprocess compresses context to reduce token usage
-func (c *ContextCompressionPreprocessor) Preprocess(ctx *ModeContext) error {
+func (c *ContextCompressionPreprocessor) Preprocess(ctx *StrategyContext) error {
 	// TODO: Implement context compression
 	// - Summarize long messages
 	// - Remove redundant information
@@ -132,7 +132,7 @@ func NewContextEnhancementPreprocessor(enhancementType string) *ContextEnhanceme
 }
 
 // Preprocess enhances context with additional information
-func (c *ContextEnhancementPreprocessor) Preprocess(ctx *ModeContext) error {
+func (c *ContextEnhancementPreprocessor) Preprocess(ctx *StrategyContext) error {
 	// TODO: Implement context enhancement
 	// - Add relevant system prompts
 	// - Include context about the mode
@@ -173,7 +173,7 @@ func NewContextFilterPreprocessor(filterRules []FilterRule) *ContextFilterPrepro
 }
 
 // Preprocess filters context based on rules
-func (c *ContextFilterPreprocessor) Preprocess(ctx *ModeContext) error {
+func (c *ContextFilterPreprocessor) Preprocess(ctx *StrategyContext) error {
 	// TODO: Implement context filtering
 	// - Apply filter rules in priority order
 	// - Remove unwanted messages
@@ -206,7 +206,7 @@ func NewContextSummarizationPreprocessor(maxSummaryLength int) *ContextSummariza
 }
 
 // Preprocess summarizes long contexts
-func (c *ContextSummarizationPreprocessor) Preprocess(ctx *ModeContext) error {
+func (c *ContextSummarizationPreprocessor) Preprocess(ctx *StrategyContext) error {
 	// TODO: Implement context summarization
 	// - Identify long conversation threads
 	// - Generate summaries for old messages
@@ -242,7 +242,7 @@ func (p *PreprocessingPipeline) AddPreprocessor(preprocessor ContextPreprocessor
 }
 
 // Execute runs all preprocessors in priority order
-func (p *PreprocessingPipeline) Execute(ctx *ModeContext) error {
+func (p *PreprocessingPipeline) Execute(ctx *StrategyContext) error {
 	// Sort preprocessors by priority (highest first)
 	// TODO: Implement sorting by priority
 
@@ -255,31 +255,31 @@ func (p *PreprocessingPipeline) Execute(ctx *ModeContext) error {
 	return nil
 }
 
-// CreateModeSpecificPipeline creates a preprocessing pipeline for a specific mode
-func CreateModeSpecificPipeline(mode Mode, config *Config) *PreprocessingPipeline {
+// CreateStrategySpecificPipeline creates a preprocessing pipeline for a specific strategy
+func CreateStrategySpecificPipeline(strategy Strategy, config *Config) *PreprocessingPipeline {
 	pipeline := NewPreprocessingPipeline()
 
-	switch mode {
-	case FastMode:
-		// Fast mode: prioritize speed, truncate if needed
+	switch strategy {
+	case SpeedStrategy:
+		// Speed strategy: prioritize speed, truncate if needed
 		pipeline.AddPreprocessor(NewContextLengthPreprocessor(1000))
 		pipeline.AddPreprocessor(NewContextFilterPreprocessor([]FilterRule{
 			{Type: "remove", Condition: "length > 1000", Action: "truncate", Priority: 1},
 		}))
 
-	case SophisticatedMode:
-		// Sophisticated mode: enhance context for quality
+	case QualityStrategy:
+		// Quality strategy: enhance context for quality
 		pipeline.AddPreprocessor(NewContextEnhancementPreprocessor("quality"))
 		pipeline.AddPreprocessor(NewContextSummarizationPreprocessor(2000))
 
-	case CostSavingMode:
-		// Cost-saving mode: compress and summarize
+	case BudgetStrategy:
+		// Budget strategy: compress and summarize
 		pipeline.AddPreprocessor(NewContextCompressionPreprocessor(0.7))
 		pipeline.AddPreprocessor(NewContextSummarizationPreprocessor(1000))
 		pipeline.AddPreprocessor(NewContextLengthPreprocessor(800))
 
-	case AutoMode:
-		// Auto mode: balanced approach
+	case BalancedStrategy:
+		// Balanced strategy: balanced approach
 		pipeline.AddPreprocessor(NewContextLengthPreprocessor(1500))
 		pipeline.AddPreprocessor(NewContextCompressionPreprocessor(0.8))
 	}

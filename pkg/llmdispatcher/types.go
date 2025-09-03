@@ -7,21 +7,21 @@ import (
 	"time"
 )
 
-// Mode represents the predefined optimization modes
-type Mode string
+// Strategy represents the predefined optimization strategies
+type Strategy string
 
 const (
-	// FastMode prioritizes speed over cost and accuracy
-	FastMode Mode = "fast"
+	// SpeedStrategy prioritizes speed over cost and accuracy
+	SpeedStrategy Strategy = "speed"
 
-	// SophisticatedMode prioritizes accuracy and intelligence over speed and cost
-	SophisticatedMode Mode = "sophisticated"
+	// QualityStrategy prioritizes accuracy and intelligence over speed and cost
+	QualityStrategy Strategy = "quality"
 
-	// CostSavingMode prioritizes cost savings over speed and accuracy
-	CostSavingMode Mode = "cost_saving"
+	// BudgetStrategy prioritizes cost savings over speed and accuracy
+	BudgetStrategy Strategy = "budget"
 
-	// AutoMode automatically balances speed, accuracy, and cost
-	AutoMode Mode = "auto"
+	// BalancedStrategy automatically balances speed, accuracy, and cost
+	BalancedStrategy Strategy = "balanced"
 )
 
 // Vendor defines the interface that all LLM vendors must implement
@@ -126,8 +126,8 @@ type Capabilities struct {
 
 // Config holds the simplified dispatcher configuration
 type Config struct {
-	// Mode determines the optimization strategy
-	Mode Mode `json:"mode"`
+	// Strategy determines the optimization strategy
+	Strategy Strategy `json:"strategy"`
 
 	// Basic configuration
 	Timeout       time.Duration `json:"timeout,omitempty"`
@@ -147,45 +147,45 @@ type RoutingStrategy interface {
 	Name() string
 }
 
-// ModeStrategy implements the routing strategy for each mode
-type ModeStrategy struct {
-	mode    Mode
-	config  *Config
-	vendors map[string]Vendor
+// StrategyRouter implements the routing strategy for each strategy
+type StrategyRouter struct {
+	strategy Strategy
+	config   *Config
+	vendors  map[string]Vendor
 }
 
-// NewModeStrategy creates a new mode-based routing strategy
-func NewModeStrategy(mode Mode, config *Config, vendors map[string]Vendor) *ModeStrategy {
-	return &ModeStrategy{
-		mode:    mode,
-		config:  config,
-		vendors: vendors,
+// NewStrategyRouter creates a new strategy-based routing strategy
+func NewStrategyRouter(strategy Strategy, config *Config, vendors map[string]Vendor) *StrategyRouter {
+	return &StrategyRouter{
+		strategy: strategy,
+		config:   config,
+		vendors:  vendors,
 	}
 }
 
 // Name returns the strategy name
-func (m *ModeStrategy) Name() string {
-	return string(m.mode)
+func (m *StrategyRouter) Name() string {
+	return string(m.strategy)
 }
 
-// SelectVendor selects the best vendor based on the current mode
-func (m *ModeStrategy) SelectVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
-	switch m.mode {
-	case FastMode:
-		return m.selectFastVendor(ctx, req, vendors)
-	case SophisticatedMode:
-		return m.selectSophisticatedVendor(ctx, req, vendors)
-	case CostSavingMode:
-		return m.selectCostSavingVendor(ctx, req, vendors)
-	case AutoMode:
-		return m.selectAutoVendor(ctx, req, vendors)
+// SelectVendor selects the best vendor based on the current strategy
+func (m *StrategyRouter) SelectVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
+	switch m.strategy {
+	case SpeedStrategy:
+		return m.selectSpeedVendor(ctx, req, vendors)
+	case QualityStrategy:
+		return m.selectQualityVendor(ctx, req, vendors)
+	case BudgetStrategy:
+		return m.selectBudgetVendor(ctx, req, vendors)
+	case BalancedStrategy:
+		return m.selectBalancedVendor(ctx, req, vendors)
 	default:
-		return nil, fmt.Errorf("unknown mode: %s", m.mode)
+		return nil, fmt.Errorf("unknown strategy: %s", m.strategy)
 	}
 }
 
-// selectFastVendor prioritizes vendors with lowest latency and fastest models
-func (m *ModeStrategy) selectFastVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
+// selectSpeedVendor prioritizes vendors with lowest latency and fastest models
+func (m *StrategyRouter) selectSpeedVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
 	// Fast mode intelligence: prioritize vendors and models known for speed
 	fastVendors := []struct {
 		name     string
@@ -218,8 +218,8 @@ func (m *ModeStrategy) selectFastVendor(ctx context.Context, req *Request, vendo
 	return nil, fmt.Errorf("no available vendors for fast mode")
 }
 
-// selectSophisticatedVendor prioritizes the most capable models and vendors
-func (m *ModeStrategy) selectSophisticatedVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
+// selectQualityVendor prioritizes the most capable models and vendors
+func (m *StrategyRouter) selectQualityVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
 	// Sophisticated mode intelligence: prioritize vendors with the most capable models
 	sophisticatedVendors := []struct {
 		name     string
@@ -252,8 +252,8 @@ func (m *ModeStrategy) selectSophisticatedVendor(ctx context.Context, req *Reque
 	return nil, fmt.Errorf("no available vendors for sophisticated mode")
 }
 
-// selectCostSavingVendor prioritizes the cheapest options
-func (m *ModeStrategy) selectCostSavingVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
+// selectBudgetVendor prioritizes the cheapest options
+func (m *StrategyRouter) selectBudgetVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
 	// Cost-saving mode intelligence: prioritize cheapest vendors and models
 	costSavingVendors := []struct {
 		name     string
@@ -287,8 +287,8 @@ func (m *ModeStrategy) selectCostSavingVendor(ctx context.Context, req *Request,
 	return nil, fmt.Errorf("no available vendors for cost-saving mode")
 }
 
-// selectAutoVendor balances all factors intelligently
-func (m *ModeStrategy) selectAutoVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
+// selectBalancedVendor balances all factors intelligently
+func (m *StrategyRouter) selectBalancedVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
 	// Auto mode intelligence: balance speed, cost, and capability
 	balancedVendors := []struct {
 		name     string
@@ -325,7 +325,7 @@ func (m *ModeStrategy) selectAutoVendor(ctx context.Context, req *Request, vendo
 }
 
 // optimizeRequestForSpeed tunes request parameters for maximum speed
-func (m *ModeStrategy) optimizeRequestForSpeed(req *Request) {
+func (m *StrategyRouter) optimizeRequestForSpeed(req *Request) {
 	// Speed optimizations
 	if req.Temperature == 0 {
 		req.Temperature = 0.3 // Lower temperature for faster, more deterministic responses
@@ -342,7 +342,7 @@ func (m *ModeStrategy) optimizeRequestForSpeed(req *Request) {
 }
 
 // optimizeRequestForSophistication tunes request parameters for maximum quality
-func (m *ModeStrategy) optimizeRequestForSophistication(req *Request) {
+func (m *StrategyRouter) optimizeRequestForSophistication(req *Request) {
 	// Sophistication optimizations
 	if req.Temperature == 0 {
 		req.Temperature = 0.7 // Higher temperature for more creative responses
@@ -359,7 +359,7 @@ func (m *ModeStrategy) optimizeRequestForSophistication(req *Request) {
 }
 
 // optimizeRequestForCostSaving tunes request parameters for minimum cost
-func (m *ModeStrategy) optimizeRequestForCostSaving(req *Request) {
+func (m *StrategyRouter) optimizeRequestForCostSaving(req *Request) {
 	// Cost-saving optimizations
 	if req.Temperature == 0 {
 		req.Temperature = 0.1 // Very low temperature for deterministic, shorter responses
@@ -376,7 +376,7 @@ func (m *ModeStrategy) optimizeRequestForCostSaving(req *Request) {
 }
 
 // optimizeRequestForBalance tunes request parameters for balanced performance
-func (m *ModeStrategy) optimizeRequestForBalance(req *Request) {
+func (m *StrategyRouter) optimizeRequestForBalance(req *Request) {
 	// Balanced optimizations
 	if req.Temperature == 0 {
 		req.Temperature = 0.5 // Moderate temperature for balanced creativity

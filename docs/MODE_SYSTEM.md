@@ -10,10 +10,10 @@ The LLM Dispatcher implements a sophisticated mode-based system that provides di
 
 The system supports four predefined modes:
 
-- **Fast Mode**: Prioritizes speed over cost and accuracy
-- **Sophisticated Mode**: Prioritizes accuracy and intelligence over speed and cost  
-- **Cost Saving Mode**: Prioritizes cost savings over speed and accuracy
-- **Auto Mode**: Automatically balances speed, accuracy, and cost
+- **Speed Mode**: Prioritizes speed over cost and accuracy
+- **Quality Mode**: Prioritizes accuracy and intelligence over speed and cost  
+- **Budget Mode**: Prioritizes cost savings over speed and accuracy
+- **Balanced Mode**: Automatically balances speed, accuracy, and cost
 
 ### Mode Context
 
@@ -44,7 +44,7 @@ The `ModeRegistry` manages all available modes and their strategies:
 
 ```go
 registry := models.NewModeRegistry()
-registry.RegisterStrategy(models.FastMode, customFastStrategy)
+registry.RegisterStrategy(models.SpeedStrategy, customSpeedStrategy)
 ```
 
 ### 2. Context Preprocessing
@@ -102,14 +102,14 @@ Each mode has specialized behavior:
 
 ```go
 config := &models.Config{
-    Mode: models.FastMode,
+    Mode: models.SpeedMode,
     Timeout: 30 * time.Second,
     EnableLogging: true,
     EnableMetrics: true,
     ContextPreprocessing: &models.ContextPreprocessingConfig{
-        EnabledModes: map[models.Mode]bool{
-            models.FastMode: true,
-            models.SophisticatedMode: true,
+        EnabledStrategies: map[models.Strategy]bool{
+            models.SpeedStrategy: true,
+            models.QualityStrategy: true,
         },
         MaxContextLength: 2000,
         EnableSummarization: true,
@@ -126,7 +126,7 @@ config := &models.Config{
 
 ```go
 dispatcher := dispatcher.NewWithConfig(&models.Config{
-    Mode: models.FastMode,
+    Mode: models.SpeedMode,
 })
 
 // Register vendors
@@ -148,9 +148,9 @@ type CustomFastStrategy struct {
     *models.BaseModeStrategy
 }
 
-func NewCustomFastStrategy() *CustomFastStrategy {
-    return &CustomFastStrategy{
-        BaseModeStrategy: models.NewBaseModeStrategy(models.FastMode, 9),
+func NewCustomSpeedStrategy() *CustomSpeedStrategy {
+    return &CustomSpeedStrategy{
+        BaseModeStrategy: models.NewBaseModeStrategy(models.SpeedMode, 9),
     }
 }
 

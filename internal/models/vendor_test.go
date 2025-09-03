@@ -36,8 +36,8 @@ func TestRequest_Validate(t *testing.T) {
 		{
 			name: "empty model with mode",
 			request: &Request{
-				Model: "",
-				Mode:  "fast",
+				Model:    "",
+				Strategy: "speed",
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
 				},
@@ -110,8 +110,8 @@ func TestRequest_Validate(t *testing.T) {
 		{
 			name: "invalid mode",
 			request: &Request{
-				Model: "",
-				Mode:  "invalid_mode",
+				Model:    "",
+				Strategy: "invalid_mode",
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
 				},

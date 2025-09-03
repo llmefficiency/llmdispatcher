@@ -93,7 +93,7 @@ func TestNewWithConfig(t *testing.T) {
 		{
 			name: "with config",
 			config: &models.Config{
-				Mode:          models.AutoMode,
+				Strategy:      models.BalancedStrategy,
 				Timeout:       30 * time.Second,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -265,7 +265,7 @@ func TestSend_WithRetry(t *testing.T) {
 
 func TestSend_WithModeStrategySuccess(t *testing.T) {
 	dispatcher := NewWithConfig(&models.Config{
-		Mode:          models.AutoMode,
+		Strategy:      models.BalancedStrategy,
 		EnableLogging: true,
 		EnableMetrics: true,
 	})
@@ -306,7 +306,7 @@ func TestSend_WithModeStrategySuccess(t *testing.T) {
 
 func TestSend_WithModeStrategy(t *testing.T) {
 	config := &models.Config{
-		Mode: models.AutoMode,
+		Strategy: models.BalancedStrategy,
 	}
 
 	dispatcher := NewWithConfig(config)
@@ -655,7 +655,7 @@ func TestDispatcher_SelectVendor_NoVendors(t *testing.T) {
 		},
 	}
 
-	vendor, err := dispatcher.selectVendorWithMode(context.Background(), req)
+	vendor, err := dispatcher.selectVendorWithStrategy(context.Background(), req)
 	if err == nil {
 		t.Error("Expected error when no vendors are registered")
 	}
@@ -681,7 +681,7 @@ func TestDispatcher_SelectVendor_Unavailable(t *testing.T) {
 		},
 	}
 
-	vendor, err := dispatcher.selectVendorWithMode(context.Background(), req)
+	vendor, err := dispatcher.selectVendorWithStrategy(context.Background(), req)
 	if err == nil {
 		t.Error("Expected error when no vendors are available")
 	}
@@ -690,9 +690,9 @@ func TestDispatcher_SelectVendor_Unavailable(t *testing.T) {
 	}
 }
 
-func TestDispatcher_SelectVendor_ModeBased(t *testing.T) {
+func TestDispatcher_SelectVendor_StrategyBased(t *testing.T) {
 	dispatcher := NewWithConfig(&models.Config{
-		Mode: models.AutoMode,
+		Strategy: models.BalancedStrategy,
 	})
 
 	// Register available vendor
@@ -709,7 +709,7 @@ func TestDispatcher_SelectVendor_ModeBased(t *testing.T) {
 		},
 	}
 
-	vendor, err := dispatcher.selectVendorWithMode(context.Background(), req)
+	vendor, err := dispatcher.selectVendorWithStrategy(context.Background(), req)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -723,7 +723,7 @@ func TestDispatcher_SelectVendor_ModeBased(t *testing.T) {
 
 func TestDispatcher_SelectVendor_AvailableVendor(t *testing.T) {
 	dispatcher := NewWithConfig(&models.Config{
-		Mode: models.AutoMode,
+		Strategy: models.BalancedStrategy,
 	})
 
 	// Register available vendor
@@ -740,7 +740,7 @@ func TestDispatcher_SelectVendor_AvailableVendor(t *testing.T) {
 		},
 	}
 
-	vendor, err := dispatcher.selectVendorWithMode(context.Background(), req)
+	vendor, err := dispatcher.selectVendorWithStrategy(context.Background(), req)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}

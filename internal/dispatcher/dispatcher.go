@@ -12,18 +12,18 @@ import (
 
 // Dispatcher manages routing of LLM requests to different vendors
 type Dispatcher struct {
-	vendors      map[string]models.LLMVendor
-	config       *models.Config
-	stats        *models.DispatcherStats
-	statsMutex   sync.RWMutex
-	logger       *log.Logger
-	modeRegistry *models.ModeRegistry
+	vendors          map[string]models.LLMVendor
+	config           *models.Config
+	stats            *models.DispatcherStats
+	statsMutex       sync.RWMutex
+	logger           *log.Logger
+	strategyRegistry *models.StrategyRegistry
 }
 
 // New creates a new dispatcher with default configuration
 func New() *Dispatcher {
 	return NewWithConfig(&models.Config{
-		Mode:          models.AutoMode,
+		Strategy:      models.BalancedStrategy,
 		Timeout:       30 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,
@@ -40,11 +40,11 @@ func NewWithConfig(config *models.Config) *Dispatcher {
 		vendors: make(map[string]models.LLMVendor),
 		config:  config,
 		stats: &models.DispatcherStats{
-			VendorStats: make(map[string]models.VendorStats),
-			ModeStats:   make(map[models.Mode]*models.ModeStats),
+			VendorStats:   make(map[string]models.VendorStats),
+			StrategyStats: make(map[models.Strategy]*models.StrategyStats),
 		},
-		logger:       log.New(log.Writer(), "[LLMDispatcher] ", log.LstdFlags),
-		modeRegistry: models.NewModeRegistry(),
+		logger:           log.New(log.Writer(), "[LLMDispatcher] ", log.LstdFlags),
+		strategyRegistry: models.NewStrategyRegistry(),
 	}
 
 	return dispatcher
@@ -77,7 +77,7 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 	}
 
 	// Validate request
-	fmt.Printf("DEBUG: Dispatcher validating request with Model='%s', Mode='%s'\n", req.Model, req.Mode)
+	fmt.Printf("DEBUG: Dispatcher validating request with Model='%s', Strategy='%s'\n", req.Model, req.Strategy)
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %v", models.ErrInvalidRequest, err)
 	}
@@ -98,7 +98,7 @@ func (d *Dispatcher) Send(ctx context.Context, req *models.Request) (*models.Res
 	}
 
 	// Use mode-based vendor selection with context preprocessing
-	vendor, err := d.selectVendorWithMode(ctx, req)
+	vendor, err := d.selectVendorWithStrategy(ctx, req)
 	if err != nil {
 		d.updateStats(false, "", time.Since(start), 0.0)
 		return nil, fmt.Errorf("failed to select vendor: %w", err)
@@ -133,7 +133,7 @@ func (d *Dispatcher) SendStreaming(ctx context.Context, req *models.Request) (*m
 	}
 
 	// Validate request
-	fmt.Printf("DEBUG: Dispatcher validating streaming request with Model='%s', Mode='%s'\n", req.Model, req.Mode)
+	fmt.Printf("DEBUG: Dispatcher validating streaming request with Model='%s', Strategy='%s'\n", req.Model, req.Strategy)
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %v", models.ErrInvalidRequest, err)
 	}
@@ -157,7 +157,7 @@ func (d *Dispatcher) SendStreaming(ctx context.Context, req *models.Request) (*m
 	}
 
 	// Use mode-based vendor selection with context preprocessing
-	vendor, err := d.selectVendorWithMode(ctx, req)
+	vendor, err := d.selectVendorWithStrategy(ctx, req)
 	if err != nil {
 		d.updateStats(false, "", time.Since(start), 0.0)
 		return nil, fmt.Errorf("failed to select vendor: %w", err)
@@ -285,20 +285,20 @@ func (d *Dispatcher) SendStreamingToVendor(ctx context.Context, vendorName strin
 	return streamingResp, nil
 }
 
-// selectVendorWithMode uses the new mode system to select vendors with context preprocessing
-func (d *Dispatcher) selectVendorWithMode(ctx context.Context, req *models.Request) (models.LLMVendor, error) {
-	// Determine the mode to use
-	mode := d.config.Mode
-	if req.Mode != "" {
-		// TODO: Validate that the request mode is valid
-		// For now, we'll use the request mode if specified
-		mode = models.Mode(req.Mode)
+// selectVendorWithStrategy uses the strategy system to select vendors with context preprocessing
+func (d *Dispatcher) selectVendorWithStrategy(ctx context.Context, req *models.Request) (models.LLMVendor, error) {
+	// Determine the strategy to use
+	strategy := d.config.Strategy
+	if req.Strategy != "" {
+		// TODO: Validate that the request strategy is valid
+		// For now, we'll use the request strategy if specified
+		strategy = models.Strategy(req.Strategy)
 	}
 
-	// Get the mode strategy
-	strategy, err := d.modeRegistry.GetStrategy(mode)
+	// Get the strategy implementation
+	impl, err := d.strategyRegistry.GetStrategy(strategy)
 	if err != nil {
-		d.logger.Printf("Failed to get mode strategy for %s: %v", mode, err)
+		d.logger.Printf("Failed to get strategy implementation for %s: %v", strategy, err)
 		// Fallback to any available vendor
 		for name, vendor := range d.vendors {
 			if vendor.IsAvailable(ctx) {
@@ -309,38 +309,38 @@ func (d *Dispatcher) selectVendorWithMode(ctx context.Context, req *models.Reque
 		return nil, fmt.Errorf("no available vendors")
 	}
 
-	// Create mode context
-	modeContext := &models.ModeContext{
-		Mode:             mode,
+	// Create strategy context
+	strategyContext := &models.StrategyContext{
+		Strategy:         strategy,
 		Request:          req,
 		AvailableVendors: d.vendors,
 		Config:           d.config,
-		Stats:            d.getModeStats(mode),
+		Stats:            d.getStrategyStats(strategy),
 		Context:          ctx,
 	}
 
 	// Validate context
-	if err := strategy.ValidateContext(modeContext); err != nil {
-		d.logger.Printf("Mode context validation failed: %v", err)
-		return nil, fmt.Errorf("mode context validation failed: %w", err)
+	if err := impl.ValidateContext(strategyContext); err != nil {
+		d.logger.Printf("Strategy context validation failed: %v", err)
+		return nil, fmt.Errorf("strategy context validation failed: %w", err)
 	}
 
-	// Preprocess context based on mode
-	if err := strategy.PreprocessContext(modeContext); err != nil {
+	// Preprocess context based on strategy
+	if err := impl.PreprocessContext(strategyContext); err != nil {
 		d.logger.Printf("Context preprocessing failed: %v", err)
 		// Continue without preprocessing rather than failing
 	}
 
-	// Optimize request for the mode
-	if err := strategy.OptimizeRequest(modeContext); err != nil {
+	// Optimize request for the strategy
+	if err := impl.OptimizeRequest(strategyContext); err != nil {
 		d.logger.Printf("Request optimization failed: %v", err)
 		// Continue without optimization rather than failing
 	}
 
-	// Select vendor using the mode strategy
-	vendor, err := strategy.SelectVendor(modeContext)
+	// Select vendor using the strategy implementation
+	vendor, err := impl.SelectVendor(strategyContext)
 	if err != nil {
-		d.logger.Printf("Mode-based vendor selection failed: %v", err)
+		d.logger.Printf("Strategy-based vendor selection failed: %v", err)
 		// Fallback to any available vendor
 		for name, vendor := range d.vendors {
 			if vendor.IsAvailable(ctx) {
@@ -351,31 +351,31 @@ func (d *Dispatcher) selectVendorWithMode(ctx context.Context, req *models.Reque
 		return nil, fmt.Errorf("no available vendors")
 	}
 
-	// If no model is specified but we have a mode, select an appropriate model
-	if req.Model == "" && req.Mode != "" {
-		selectedModel := selectModelForVendorAndMode(vendor.Name(), mode)
+	// If no model is specified but we have a strategy, select an appropriate model
+	if req.Model == "" && req.Strategy != "" {
+		selectedModel := selectModelForVendorAndStrategy(vendor.Name(), strategy)
 		if selectedModel != "" {
 			req.Model = selectedModel
-			d.logger.Printf("Auto-selected model '%s' for vendor '%s' in mode '%s'", selectedModel, vendor.Name(), mode)
+			d.logger.Printf("Auto-selected model '%s' for vendor '%s' in strategy '%s'", selectedModel, vendor.Name(), strategy)
 		} else {
-			d.logger.Printf("Warning: Could not auto-select model for vendor '%s' in mode '%s'", vendor.Name(), mode)
+			d.logger.Printf("Warning: Could not auto-select model for vendor '%s' in strategy '%s'", vendor.Name(), strategy)
 		}
 	}
 
-	d.logger.Printf("Selected vendor %s using mode %s", vendor.Name(), mode)
+	d.logger.Printf("Selected vendor %s using strategy %s", vendor.Name(), strategy)
 	return vendor, nil
 }
 
-// selectModelForVendorAndMode selects an appropriate model for a given vendor and mode
-func selectModelForVendorAndMode(vendor string, mode models.Mode) string {
+// selectModelForVendorAndStrategy selects an appropriate model for a given vendor and strategy
+func selectModelForVendorAndStrategy(vendor string, strategy models.Strategy) string {
 	availableModels := models.GetVendorModels(vendor)
 	if len(availableModels) == 0 {
 		return ""
 	}
 
-	switch mode {
-	case models.FastMode:
-		// For fast mode, prefer faster models
+	switch strategy {
+	case models.SpeedStrategy:
+		// For speed strategy, prefer faster models
 		fastModels := map[string][]string{
 			"openai":    {"gpt-3.5-turbo", "gpt-4o-mini"},
 			"anthropic": {"claude-3-5-haiku-20241022", "claude-3-haiku-20240307"},
@@ -392,8 +392,8 @@ func selectModelForVendorAndMode(vendor string, mode models.Mode) string {
 		// Fallback to first available model
 		return availableModels[0]
 
-	case models.SophisticatedMode:
-		// For sophisticated mode, prefer more capable models
+	case models.QualityStrategy:
+		// For quality strategy, prefer more capable models
 		sophisticatedModels := map[string][]string{
 			"openai":    {"gpt-4o", "gpt-4-turbo", "gpt-4"},
 			"anthropic": {"claude-3-5-sonnet-20241022", "claude-3-opus-20240229"},
@@ -410,8 +410,8 @@ func selectModelForVendorAndMode(vendor string, mode models.Mode) string {
 		// Fallback to first available model
 		return availableModels[0]
 
-	case models.CostSavingMode:
-		// For cost saving mode, prefer cheaper models
+	case models.BudgetStrategy:
+		// For budget strategy, prefer cheaper models
 		costSavingModels := map[string][]string{
 			"openai":    {"gpt-3.5-turbo", "gpt-4o-mini"},
 			"anthropic": {"claude-3-5-haiku-20241022", "claude-3-haiku-20240307"},
@@ -434,19 +434,19 @@ func selectModelForVendorAndMode(vendor string, mode models.Mode) string {
 	}
 }
 
-// getModeStats returns the stats for a specific mode, creating if necessary
-func (d *Dispatcher) getModeStats(mode models.Mode) *models.ModeStats {
+// getStrategyStats returns the stats for a specific strategy, creating if necessary
+func (d *Dispatcher) getStrategyStats(strategy models.Strategy) *models.StrategyStats {
 	d.statsMutex.Lock()
 	defer d.statsMutex.Unlock()
 
-	if d.stats.ModeStats == nil {
-		d.stats.ModeStats = make(map[models.Mode]*models.ModeStats)
+	if d.stats.StrategyStats == nil {
+		d.stats.StrategyStats = make(map[models.Strategy]*models.StrategyStats)
 	}
 
-	stats, exists := d.stats.ModeStats[mode]
+	stats, exists := d.stats.StrategyStats[strategy]
 	if !exists {
-		stats = &models.ModeStats{}
-		d.stats.ModeStats[mode] = stats
+		stats = &models.StrategyStats{}
+		d.stats.StrategyStats[strategy] = stats
 	}
 
 	return stats
@@ -613,10 +613,10 @@ func (d *Dispatcher) GetStats() *models.DispatcherStats {
 		stats.VendorStats[k] = v
 	}
 
-	// Copy mode stats
-	stats.ModeStats = make(map[models.Mode]*models.ModeStats)
-	for k, v := range d.stats.ModeStats {
-		stats.ModeStats[k] = v
+	// Copy strategy stats
+	stats.StrategyStats = make(map[models.Strategy]*models.StrategyStats)
+	for k, v := range d.stats.StrategyStats {
+		stats.StrategyStats[k] = v
 	}
 
 	return &stats
@@ -657,12 +657,12 @@ func (d *Dispatcher) GetVendor(name string) (models.LLMVendor, bool) {
 	return vendor, exists
 }
 
-// GetModeRegistry returns the mode registry for external access
-func (d *Dispatcher) GetModeRegistry() *models.ModeRegistry {
-	return d.modeRegistry
+// GetStrategyRegistry returns the strategy registry for external access
+func (d *Dispatcher) GetStrategyRegistry() *models.StrategyRegistry {
+	return d.strategyRegistry
 }
 
-// RegisterModeStrategy registers a custom mode strategy
-func (d *Dispatcher) RegisterModeStrategy(mode models.Mode, strategy models.ModeStrategy) {
-	d.modeRegistry.RegisterStrategy(mode, strategy)
+// RegisterStrategy registers a custom strategy implementation
+func (d *Dispatcher) RegisterStrategy(strategy models.Strategy, impl models.StrategyImplementation) {
+	d.strategyRegistry.RegisterStrategy(strategy, impl)
 }

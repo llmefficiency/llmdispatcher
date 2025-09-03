@@ -26,7 +26,7 @@ type WebService struct {
 
 // RequestPayload represents the incoming request payload
 type RequestPayload struct {
-	Model       string           `json:"model"`
+	Model       string           `json:"strategyl"`
 	Messages    []models.Message `json:"messages"`
 	Temperature float64          `json:"temperature,omitempty"`
 	MaxTokens   int              `json:"max_tokens,omitempty"`
@@ -34,8 +34,8 @@ type RequestPayload struct {
 	Stream      bool             `json:"stream,omitempty"`
 	Stop        []string         `json:"stop,omitempty"`
 	User        string           `json:"user,omitempty"`
-	Vendor      string           `json:"vendor,omitempty"` // Optional vendor override
-	Mode        string           `json:"mode,omitempty"`   // Optional mode override
+	Vendor      string           `json:"vendor,omitempty"`   // Optional vendor override
+	Strategy    string           `json:"strategy,omitempty"` // Optional strategy override
 }
 
 // ResponsePayload represents the response payload
@@ -55,7 +55,7 @@ type StreamingResponsePayload struct {
 // VendorTestPayload represents vendor test configuration
 type VendorTestPayload struct {
 	Vendor      string           `json:"vendor"`
-	Model       string           `json:"model"`
+	Model       string           `json:"strategyl"`
 	Messages    []models.Message `json:"messages"`
 	Temperature float64          `json:"temperature,omitempty"`
 	MaxTokens   int              `json:"max_tokens,omitempty"`
@@ -71,7 +71,7 @@ func NewWebService() *WebService {
 
 	// Create dispatcher configuration
 	config := &models.Config{
-		Mode:          models.AutoMode,
+		Strategy:      models.BalancedStrategy,
 		Timeout:       30 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,
@@ -212,8 +212,8 @@ func registerVendors(disp *dispatcher.Dispatcher) {
 	localConfig := &models.VendorConfig{
 		APIKey: "dummy", // Not used for local models
 		Headers: map[string]string{
-			"server_url": "http://localhost:11434",
-			"model_path": "llama2:7b",
+			"server_url":     "http://localhost:11434",
+			"strategyl_path": "llama2:7b",
 		},
 		Timeout: 120 * time.Second,
 	}
@@ -249,7 +249,7 @@ func (ws *WebService) setupRoutes() *mux.Router {
 	api.HandleFunc("/stats", ws.statsHandler).Methods("GET")
 
 	// Mode comparison endpoint
-	api.HandleFunc("/stats/modes", ws.modeComparisonHandler).Methods("GET")
+	api.HandleFunc("/stats/strategies", ws.strategyComparisonHandler).Methods("GET")
 
 	// Vendors endpoint
 	api.HandleFunc("/vendors", ws.vendorsHandler).Methods("GET")
@@ -347,11 +347,11 @@ func (ws *WebService) chatCompletionsHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Debug logging
-	fmt.Printf("DEBUG: Received payload: Model='%s', Mode='%s', Messages=%d\n", payload.Model, payload.Mode, len(payload.Messages))
+	fmt.Printf("DEBUG: Received payload: Model='%s', Strategy='%s', Messages=%d\n", payload.Strategy, payload.Strategy, len(payload.Messages))
 
 	// Convert to internal request
 	req := &models.Request{
-		Model:       payload.Model,
+		Model:       payload.Strategy,
 		Messages:    payload.Messages,
 		Temperature: payload.Temperature,
 		MaxTokens:   payload.MaxTokens,
@@ -359,21 +359,21 @@ func (ws *WebService) chatCompletionsHandler(w http.ResponseWriter, r *http.Requ
 		Stream:      false, // Force non-streaming for this endpoint
 		Stop:        payload.Stop,
 		User:        payload.User,
-		Mode:        payload.Mode,
+		Strategy:    payload.Strategy,
 	}
 
-	// If no model is specified but mode is, let the ModeStrategy handle model selection
-	if req.Model == "" && req.Mode != "" {
-		fmt.Printf("DEBUG: No model specified for mode '%s', letting ModeStrategy select appropriate model\n", req.Mode)
+	// If no strategyl is specified but strategy is, let the StrategyImplementation handle strategyl selection
+	if req.Strategy == "" && req.Strategy != "" {
+		fmt.Printf("DEBUG: No strategyl specified for strategy '%s', letting StrategyImplementation select appropriate strategyl\n", req.Strategy)
 	}
 
-	// For mode-only requests, we'll validate after auto-selecting the model
-	if req.Mode != "" && req.Model == "" {
+	// For strategy-only requests, we'll validate after auto-selecting the strategyl
+	if req.Strategy != "" && req.Strategy == "" {
 		// Skip validation here, let the dispatcher handle it
-		fmt.Printf("DEBUG: Skipping validation for mode-only request: Mode='%s', Model='%s'\n", req.Mode, req.Model)
+		fmt.Printf("DEBUG: Skipping validation for strategy-only request: Strategy='%s', Model='%s'\n", req.Strategy, req.Strategy)
 	} else {
 		// Validate request for regular requests
-		fmt.Printf("DEBUG: Validating regular request: Mode='%s', Model='%s'\n", req.Mode, req.Model)
+		fmt.Printf("DEBUG: Validating regular request: Strategy='%s', Model='%s'\n", req.Strategy, req.Strategy)
 		if err := req.Validate(); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
 			return
@@ -392,11 +392,11 @@ func (ws *WebService) chatCompletionsHandler(w http.ResponseWriter, r *http.Requ
 		// Use specific vendor if provided
 		response, err = ws.dispatcher.SendToVendor(ctx, payload.Vendor, req)
 	} else {
-		// Use mode-based vendor selection if mode is specified
-		if payload.Mode != "" {
-			// Update the request with the specified mode and use the existing dispatcher
-			// The dispatcher will handle mode-based vendor selection internally
-			req.Mode = payload.Mode
+		// Use strategy-based vendor selection if strategy is specified
+		if payload.Strategy != "" {
+			// Update the request with the specified strategy and use the existing dispatcher
+			// The dispatcher will handle strategy-based vendor selection internally
+			req.Strategy = payload.Strategy
 			response, err = ws.dispatcher.Send(ctx, req)
 		} else {
 			// Use automatic vendor selection
@@ -454,7 +454,7 @@ func (ws *WebService) streamingChatCompletionsHandler(w http.ResponseWriter, r *
 
 	// Convert to internal request
 	req := &models.Request{
-		Model:       payload.Model,
+		Model:       payload.Strategy,
 		Messages:    payload.Messages,
 		Temperature: payload.Temperature,
 		MaxTokens:   payload.MaxTokens,
@@ -462,16 +462,16 @@ func (ws *WebService) streamingChatCompletionsHandler(w http.ResponseWriter, r *
 		Stream:      true, // Force streaming for this endpoint
 		Stop:        payload.Stop,
 		User:        payload.User,
-		Mode:        payload.Mode,
+		Strategy:    payload.Strategy,
 	}
 
-	// For mode-only requests, we'll validate after auto-selecting the model
-	if req.Mode != "" && req.Model == "" {
+	// For strategy-only requests, we'll validate after auto-selecting the strategyl
+	if req.Strategy != "" && req.Strategy == "" {
 		// Skip validation here, let the dispatcher handle it
-		fmt.Printf("DEBUG: Skipping validation for mode-only streaming request: Mode='%s', Model='%s'\n", req.Mode, req.Model)
+		fmt.Printf("DEBUG: Skipping validation for strategy-only streaming request: Mode='%s', Model='%s'\n", req.Strategy, req.Strategy)
 	} else {
 		// Validate request for regular requests
-		fmt.Printf("DEBUG: Validating regular streaming request: Mode='%s', Model='%s'\n", req.Mode, req.Model)
+		fmt.Printf("DEBUG: Validating regular streaming request: Mode='%s', Model='%s'\n", req.Strategy, req.Strategy)
 		if err := req.Validate(); err != nil {
 			// Send error as SSE
 			fmt.Fprintf(w, "data: [ERROR] Invalid request: %v\n\n", err)
@@ -492,11 +492,11 @@ func (ws *WebService) streamingChatCompletionsHandler(w http.ResponseWriter, r *
 		// Use specific vendor if provided
 		streamResp, err = ws.dispatcher.SendStreamingToVendor(ctx, payload.Vendor, req)
 	} else {
-		// Use mode-based vendor selection if mode is specified
-		if payload.Mode != "" {
-			// Update the request with the specified mode and use the existing dispatcher
-			// The dispatcher will handle mode-based vendor selection internally
-			req.Mode = payload.Mode
+		// Use strategy-based vendor selection if strategy is specified
+		if payload.Strategy != "" {
+			// Update the request with the specified strategy and use the existing dispatcher
+			// The dispatcher will handle strategy-based vendor selection internally
+			req.Strategy = payload.Strategy
 			streamResp, err = ws.dispatcher.SendStreaming(ctx, req)
 		} else {
 			// Use automatic vendor selection
@@ -629,7 +629,7 @@ func (ws *WebService) testVendorHandler(w http.ResponseWriter, r *http.Request) 
 		// Create response from streamed content
 		response = &models.Response{
 			Content:   content.String(),
-			Model:     req.Model,
+			Model:     req.Strategy,
 			Vendor:    payload.Vendor,
 			CreatedAt: time.Now(),
 		}
@@ -665,16 +665,16 @@ func (ws *WebService) testVendorHandler(w http.ResponseWriter, r *http.Request) 
 func (ws *WebService) statsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Get mode filter from query parameter
-	mode := r.URL.Query().Get("mode")
+	// Get strategy filter from query parameter
+	strategy := r.URL.Query().Get("strategy")
 
 	stats := ws.dispatcher.GetStats()
 
-	// If mode is specified, we need to create a temporary dispatcher to get mode-specific stats
-	if mode != "" {
-		// Create a temporary dispatcher with the specified mode
-		modeConfig := &models.Config{
-			Mode:          models.Mode(mode),
+	// If strategy is specified, we need to create a temporary dispatcher to get strategy-specific stats
+	if strategy != "" {
+		// Create a temporary dispatcher with the specified strategy
+		strategyConfig := &models.Config{
+			Strategy:      models.Strategy(strategy),
 			Timeout:       ws.config.Timeout,
 			EnableLogging: ws.config.EnableLogging,
 			EnableMetrics: ws.config.EnableMetrics,
@@ -682,13 +682,13 @@ func (ws *WebService) statsHandler(w http.ResponseWriter, r *http.Request) {
 			// No ModeOverrides - let the real ModeStrategy work
 		}
 
-		// Create a temporary dispatcher with the mode
-		tempDispatcher := dispatcher.NewWithConfig(modeConfig)
+		// Create a temporary dispatcher with the strategy
+		tempDispatcher := dispatcher.NewWithConfig(strategyConfig)
 
 		// Register the same vendors
 		registerVendors(tempDispatcher)
 
-		// Send a test request to generate some stats for this mode
+		// Send a test request to generate some stats for this strategy
 		testRequest := &models.Request{
 			Model: "gpt-3.5-turbo",
 			Messages: []models.Message{
@@ -704,37 +704,37 @@ func (ws *WebService) statsHandler(w http.ResponseWriter, r *http.Request) {
 		ctx := context.Background()
 		_, err := tempDispatcher.Send(ctx, testRequest)
 		if err != nil {
-			log.Printf("⚠️  Mode %s stats test failed: %v", mode, err)
+			log.Printf("⚠️  Mode %s stats test failed: %v", strategy, err)
 		}
 
-		// Get stats from the mode-specific dispatcher
+		// Get stats from the strategy-specific dispatcher
 		stats = tempDispatcher.GetStats()
 	}
 
 	// Add debug logging
 	fmt.Printf("DEBUG: Stats request - Mode: '%s', Total Requests: %d, Successful: %d, Failed: %d\n",
-		mode, stats.TotalRequests, stats.SuccessfulRequests, stats.FailedRequests)
+		strategy, stats.TotalRequests, stats.SuccessfulRequests, stats.FailedRequests)
 
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }
 
-// modeComparisonHandler handles mode comparison requests
-func (ws *WebService) modeComparisonHandler(w http.ResponseWriter, r *http.Request) {
+// strategyComparisonHandler handles strategy comparison requests
+func (ws *WebService) strategyComparisonHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Define all available modes
-	modes := []models.Mode{
-		models.AutoMode,
-		models.FastMode,
-		models.SophisticatedMode,
-		models.CostSavingMode,
+	// Define all available strategies
+	strategies := []models.Strategy{
+		models.BalancedStrategy,
+		models.SpeedStrategy,
+		models.QualityStrategy,
+		models.BudgetStrategy,
 	}
 
-	modeStats := make(map[string]*models.DispatcherStats)
+	strategyStats := make(map[string]*models.DispatcherStats)
 
-	// Test each mode with a simple request
+	// Test each strategy with a simple request
 	testRequest := &models.Request{
 		Model: "gpt-3.5-turbo",
 		Messages: []models.Message{
@@ -747,9 +747,9 @@ func (ws *WebService) modeComparisonHandler(w http.ResponseWriter, r *http.Reque
 		MaxTokens:   100,
 	}
 
-	for _, mode := range modes {
-		// Create a test request with the specific mode
-		modeTestRequest := &models.Request{
+	for _, strategy := range strategies {
+		// Create a test request with the specific strategy
+		strategyTestRequest := &models.Request{
 			Model: "gpt-3.5-turbo",
 			Messages: []models.Message{
 				{
@@ -759,27 +759,27 @@ func (ws *WebService) modeComparisonHandler(w http.ResponseWriter, r *http.Reque
 			},
 			Temperature: 0.7,
 			MaxTokens:   100,
-			Mode:        string(mode), // Set the mode in the request
+			Strategy:    string(strategy), // Set the strategy in the request
 		}
 
-		// Send a test request using the existing dispatcher with mode-based selection
+		// Send a test request using the existing dispatcher with strategy-based selection
 		ctx := context.Background()
-		_, err := ws.dispatcher.Send(ctx, modeTestRequest)
+		_, err := ws.dispatcher.Send(ctx, strategyTestRequest)
 		if err != nil {
-			log.Printf("⚠️  Mode %s test failed: %v", mode, err)
+			log.Printf("⚠️  Mode %s test failed: %v", strategy, err)
 		}
 
 		// Get stats from the main dispatcher
 		stats := ws.dispatcher.GetStats()
-		modeStats[string(mode)] = stats
+		strategyStats[string(strategy)] = stats
 	}
 
 	// Create comparison response
 	comparison := map[string]interface{}{
-		"modes": modeStats,
+		"strategies": strategyStats,
 		"summary": map[string]interface{}{
-			"total_modes":  len(modes),
-			"test_request": testRequest,
+			"total_strategies": len(strategies),
+			"test_request":     testRequest,
 		},
 	}
 
@@ -839,7 +839,7 @@ func (ws *WebService) vendorsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// modelsHandler handles model listing requests
+// modelsHandler handles strategyl listing requests
 func (ws *WebService) modelsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

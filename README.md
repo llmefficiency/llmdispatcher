@@ -126,12 +126,12 @@ func main() {
 }
 ```
 
-### Advanced Usage with Mode-Based Routing
+### Advanced Usage with Strategy-Based Routing
 
 ```go
-// Configure dispatcher with mode-based routing
+// Configure dispatcher with strategy-based routing
 config := &models.Config{
-    Mode:          models.AutoMode, // or FastMode, SophisticatedMode, CostSavingMode
+    Strategy:      models.BalancedStrategy, // or SpeedStrategy, QualityStrategy, BudgetStrategy
     Timeout:       30 * time.Second,
     EnableLogging: true,
     EnableMetrics: true,
@@ -171,10 +171,10 @@ response, err := disp.Send(context.Background(), req)
 - Consistent request/response format
 - Automatic vendor-specific translation
 
-**2. Mode-Based Routing Engine**
-- Mode-based routing (FastMode, SophisticatedMode, CostSavingMode, AutoMode)
+**2. Strategy-Based Routing Engine**
+- Strategy-based routing (SpeedStrategy, QualityStrategy, BudgetStrategy, BalancedStrategy)
 - Model pattern matching for vendor selection
-- Basic cost awareness (built into mode strategies)
+- Basic cost awareness (built into strategy implementations)
 - ⚠️ **Note**: Advanced cost and latency optimization features are planned but not yet fully implemented
 
 **3. Resilience & Reliability**

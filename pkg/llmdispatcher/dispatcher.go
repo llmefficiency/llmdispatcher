@@ -25,7 +25,7 @@ func NewWithConfig(config *Config) *Dispatcher {
 	internalConfig := &models.Config{}
 
 	if config != nil {
-		internalConfig.Mode = models.Mode(config.Mode)
+		internalConfig.Strategy = models.Strategy(config.Strategy)
 		internalConfig.Timeout = config.Timeout
 		internalConfig.EnableLogging = config.EnableLogging
 		internalConfig.EnableMetrics = config.EnableMetrics

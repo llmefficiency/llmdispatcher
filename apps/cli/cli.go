@@ -61,20 +61,20 @@ func printDetailedStats(stats *models.DispatcherStats) {
 }
 
 // printModeComparison prints a comparison of stats across different modes
-func printModeComparison(modeStats map[models.Mode]*models.DispatcherStats) {
+func printStrategyComparison(strategyStats map[models.Strategy]*models.DispatcherStats) {
 	fmt.Printf("\n🎯 MODE COMPARISON:\n")
 	fmt.Printf("┌─────────────────────────────────────────────────────────────────────────────────┐\n")
 	fmt.Printf("│ Mode           │ Requests │ Successes │ Failures │ Avg Latency │ Success Rate │\n")
 	fmt.Printf("├─────────────────────────────────────────────────────────────────────────────────┤\n")
 
-	for mode, stats := range modeStats {
+	for strategy, stats := range strategyStats {
 		successRate := 0.0
 		if stats.TotalRequests > 0 {
 			successRate = float64(stats.SuccessfulRequests) / float64(stats.TotalRequests) * 100
 		}
 
 		fmt.Printf("│ %-14s │ %-8d │ %-9d │ %-8d │ %-11s │ %-11.1f%% │\n",
-			string(mode),
+			string(strategy),
 			stats.TotalRequests,
 			stats.SuccessfulRequests,
 			stats.FailedRequests,
@@ -112,10 +112,10 @@ func loadEnv(filename string) error {
 }
 
 // runModeTest runs a test with a specific mode and returns the stats
-func runModeTest(mode models.Mode, testRequest *models.Request) *models.DispatcherStats {
-	// Create dispatcher with mode-specific configuration
+func runStrategyTest(strategy models.Strategy, testRequest *models.Request) *models.DispatcherStats {
+	// Create dispatcher with strategy-specific configuration
 	config := &models.Config{
-		Mode:          mode,
+		Strategy:      strategy,
 		Timeout:       30 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,
@@ -179,7 +179,7 @@ func runModeTest(mode models.Mode, testRequest *models.Request) *models.Dispatch
 	ctx := context.Background()
 	_, err := disp.Send(ctx, testRequest)
 	if err != nil {
-		log.Printf("⚠️  Mode %s test failed: %v", mode, err)
+		log.Printf("⚠️  Strategy %s test failed: %v", strategy, err)
 	}
 
 	return disp.GetStats()
@@ -190,7 +190,7 @@ func runModeComparison() {
 	fmt.Printf("\n🚀 Running Mode Comparison Test\n")
 	fmt.Printf("Testing all modes with the same request...\n")
 
-	testRequest := &models.Request{
+	testReq := &models.Request{
 		Model: "gpt-3.5-turbo",
 		Messages: []models.Message{
 			{
@@ -202,27 +202,27 @@ func runModeComparison() {
 		MaxTokens:   100,
 	}
 
-	modes := []models.Mode{
-		models.AutoMode,
-		models.FastMode,
-		models.SophisticatedMode,
-		models.CostSavingMode,
+	strategies := []models.Strategy{
+		models.BalancedStrategy,
+		models.SpeedStrategy,
+		models.QualityStrategy,
+		models.BudgetStrategy,
 	}
 
-	modeStats := make(map[models.Mode]*models.DispatcherStats)
+	strategyStats := make(map[models.Strategy]*models.DispatcherStats)
 
-	for _, mode := range modes {
-		fmt.Printf("\n🔄 Testing %s mode...\n", mode)
-		stats := runModeTest(mode, testRequest)
-		modeStats[mode] = stats
+	for _, strategy := range strategies {
+		fmt.Printf("\n🔄 Testing %s strategy...\n", strategy)
+		stats := runStrategyTest(strategy, testReq)
+		strategyStats[strategy] = stats
 	}
 
 	// Print the comparison
-	printModeComparison(modeStats)
+	printStrategyComparison(strategyStats)
 
-	// Print detailed stats for each mode
-	for mode, stats := range modeStats {
-		fmt.Printf("\n📊 Detailed Stats for %s Mode:\n", mode)
+	// Print detailed stats for each strategy
+	for strategy, stats := range strategyStats {
+		fmt.Printf("\n📊 Detailed Stats for %s Strategy:\n", strategy)
 		printDetailedStats(stats)
 	}
 }
@@ -268,7 +268,7 @@ func main() {
 
 	// Create dispatcher with configuration
 	config := &models.Config{
-		Mode:          models.AutoMode,
+		Strategy:      models.BalancedStrategy,
 		Timeout:       30 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,
@@ -405,7 +405,7 @@ func runLocalMode(modelPath, serverURL string) {
 
 	// Create dispatcher with local configuration
 	config := &models.Config{
-		Mode:          models.CostSavingMode, // Use cost-saving mode for local
+		Strategy:      models.BudgetStrategy, // Use budget strategy for local
 		Timeout:       60 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,
@@ -563,7 +563,7 @@ func runVendorMode(vendorOverride, modelPath, serverURL string) {
 
 	// Create dispatcher with vendor configuration
 	config := &models.Config{
-		Mode:          models.AutoMode, // Use auto mode for vendor testing
+		Strategy:      models.BalancedStrategy, // Use balanced strategy for vendor testing
 		Timeout:       60 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,

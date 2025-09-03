@@ -27,9 +27,9 @@ import (
 )
 
 func main() {
-    // Create dispatcher with fast mode
+    // Create dispatcher with speed mode
     config := &models.Config{
-        Mode: models.FastMode,
+        Strategy: models.SpeedStrategy,
         Timeout: 10 * time.Second,
         EnableLogging: true,
     }
@@ -58,12 +58,12 @@ func main() {
 }
 ```
 
-### Sophisticated Mode - For High-Quality Responses
+### Quality Mode - For High-Quality Responses
 
 ```go
-// Create dispatcher with sophisticated mode
+// Create dispatcher with quality mode
 config := &models.Config{
-    Mode: models.SophisticatedMode,
+    Strategy: models.QualityStrategy,
     Timeout: 30 * time.Second,
     EnableLogging: true,
 }
@@ -71,12 +71,12 @@ config := &models.Config{
 d := dispatcher.NewWithConfig(config)
 ```
 
-### Cost Saving Mode - For Budget-Conscious Usage
+### Budget Mode - For Budget-Conscious Usage
 
 ```go
-// Create dispatcher with cost-saving mode
+// Create dispatcher with budget mode
 config := &models.Config{
-    Mode: models.CostSavingMode,
+    Mode: models.BudgetMode,
     Timeout: 20 * time.Second,
     EnableLogging: true,
 }
@@ -84,12 +84,12 @@ config := &models.Config{
 d := dispatcher.NewWithConfig(config)
 ```
 
-### Auto Mode - For Balanced Optimization
+### Balanced Mode - For Balanced Optimization
 
 ```go
-// Create dispatcher with auto mode (default)
+// Create dispatcher with balanced mode (default)
 config := &models.Config{
-    Mode: models.AutoMode,
+    Mode: models.BalancedMode,
     Timeout: 15 * time.Second,
     EnableLogging: true,
 }
@@ -141,7 +141,7 @@ config := &models.Config{
 
 // New way - use modes
 config := &models.Config{
-    Mode: models.AutoMode,
+    Mode: models.BalancedMode,
 }
 ```
 
@@ -158,7 +158,7 @@ config := &models.Config{
 
 // New way
 config := &models.Config{
-    Mode: models.CostSavingMode,
+    Mode: models.BudgetMode,
 }
 ```
 

@@ -222,7 +222,7 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "valid config",
 			config: &Config{
-				Mode:          AutoMode,
+				Strategy:      BalancedStrategy,
 				Timeout:       30 * time.Second,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -232,7 +232,7 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "empty default vendor",
 			config: &Config{
-				Mode:          AutoMode,
+				Strategy:      BalancedStrategy,
 				Timeout:       30 * time.Second,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -242,7 +242,7 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "zero timeout",
 			config: &Config{
-				Mode:          AutoMode,
+				Strategy:      BalancedStrategy,
 				Timeout:       0,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -252,7 +252,7 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "negative timeout",
 			config: &Config{
-				Mode:          AutoMode,
+				Strategy:      BalancedStrategy,
 				Timeout:       -1 * time.Second,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -366,8 +366,8 @@ func validateConfig(config *Config) error {
 	if config == nil {
 		return &MockError{message: "config cannot be nil"}
 	}
-	if config.Mode == "" {
-		return &MockError{message: "mode is required"}
+	if config.Strategy == "" {
+		return &MockError{message: "strategy is required"}
 	}
 	if config.Timeout < 0 {
 		return &MockError{message: "timeout must be non-negative"}

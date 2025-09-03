@@ -30,23 +30,23 @@ type LLMVendor interface {
 type Request struct {
 	Model       string    `json:"model"`
 	Messages    []Message `json:"messages"`
+	Strategy    string    `json:"strategy,omitempty"`
 	Temperature float64   `json:"temperature,omitempty"`
 	MaxTokens   int       `json:"max_tokens,omitempty"`
 	TopP        float64   `json:"top_p,omitempty"`
 	Stream      bool      `json:"stream,omitempty"`
 	Stop        []string  `json:"stop,omitempty"`
 	User        string    `json:"user,omitempty"`
-	Mode        string    `json:"mode,omitempty"`
 }
 
 // Validate checks if the request is valid
 func (r *Request) Validate() error {
 	// Debug logging
-	fmt.Printf("DEBUG: Validate called with Model='%s', Mode='%s'\n", r.Model, r.Mode)
+	fmt.Printf("DEBUG: Validate called with Model='%s', Strategy='%s'\n", r.Model, r.Strategy)
 
-	// For mode-based requests, model is optional as it will be auto-selected
-	if r.Model == "" && r.Mode == "" {
-		return fmt.Errorf("%w: either model or mode must be specified", ErrInvalidRequest)
+	// For strategy-based requests, model is optional as it will be auto-selected
+	if r.Model == "" && r.Strategy == "" {
+		return fmt.Errorf("%w: either model or strategy must be specified", ErrInvalidRequest)
 	}
 
 	if len(r.Messages) == 0 {
@@ -68,16 +68,16 @@ func (r *Request) Validate() error {
 		return fmt.Errorf("%w: max_tokens cannot be negative", ErrInvalidRequest)
 	}
 
-	// Validate mode if specified
-	if r.Mode != "" {
-		validModes := map[string]bool{
-			"auto":          true,
-			"fast":          true,
-			"sophisticated": true,
-			"cost_saving":   true,
+	// Validate strategy if specified
+	if r.Strategy != "" {
+		validStrategies := map[string]bool{
+			"balanced": true,
+			"speed":    true,
+			"quality":  true,
+			"budget":   true,
 		}
-		if !validModes[r.Mode] {
-			return fmt.Errorf("%w: invalid mode: %s", ErrInvalidRequest, r.Mode)
+		if !validStrategies[r.Strategy] {
+			return fmt.Errorf("%w: invalid strategy: %s", ErrInvalidRequest, r.Strategy)
 		}
 	}
 

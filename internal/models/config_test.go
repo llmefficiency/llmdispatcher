@@ -23,7 +23,7 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "valid_config",
 			config: &Config{
-				Mode:          AutoMode,
+				Strategy:      BalancedStrategy,
 				Timeout:       30 * time.Second,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -33,7 +33,7 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "empty_default_vendor",
 			config: &Config{
-				Mode:          AutoMode,
+				Strategy:      BalancedStrategy,
 				Timeout:       30 * time.Second,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -43,7 +43,7 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "zero_timeout",
 			config: &Config{
-				Mode:          AutoMode,
+				Strategy:      BalancedStrategy,
 				Timeout:       0,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -53,7 +53,7 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "negative_timeout",
 			config: &Config{
-				Mode:          AutoMode,
+				Strategy:      BalancedStrategy,
 				Timeout:       -1 * time.Second,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -163,55 +163,55 @@ func TestBackoffStrategy_Validation(t *testing.T) {
 
 func TestModeStrategy_Validation(t *testing.T) {
 	tests := []struct {
-		name    string
-		mode    Mode
-		wantErr bool
+		name     string
+		strategy Strategy
+		wantErr  bool
 	}{
 		{
-			name:    "valid_fast_mode",
-			mode:    FastMode,
-			wantErr: false,
+			name:     "valid_speed_strategy",
+			strategy: SpeedStrategy,
+			wantErr:  false,
 		},
 		{
-			name:    "valid_sophisticated_mode",
-			mode:    SophisticatedMode,
-			wantErr: false,
+			name:     "valid_quality_strategy",
+			strategy: QualityStrategy,
+			wantErr:  false,
 		},
 		{
-			name:    "valid_cost_saving_mode",
-			mode:    CostSavingMode,
-			wantErr: false,
+			name:     "valid_budget_mode",
+			strategy: BudgetStrategy,
+			wantErr:  false,
 		},
 		{
-			name:    "valid_auto_mode",
-			mode:    AutoMode,
-			wantErr: false,
+			name:     "valid_balanced_mode",
+			strategy: BalancedStrategy,
+			wantErr:  false,
 		},
 		{
-			name:    "invalid_mode",
-			mode:    Mode("invalid"),
-			wantErr: true,
+			name:     "invalid_mode",
+			strategy: Strategy("invalid"),
+			wantErr:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			registry := NewModeRegistry()
+			registry := NewStrategyRegistry()
 
 			if tt.wantErr {
 				// For invalid mode, GetStrategy should return an error
-				_, err := registry.GetStrategy(tt.mode)
+				_, err := registry.GetStrategy(tt.strategy)
 				if err == nil {
-					t.Errorf("Expected error for invalid mode %s", tt.mode)
+					t.Errorf("Expected error for invalid mode %s", tt.strategy)
 				}
 			} else {
 				// For valid modes, the strategy should be created successfully
-				strategy, err := registry.GetStrategy(tt.mode)
+				strategy, err := registry.GetStrategy(tt.strategy)
 				if err != nil {
-					t.Errorf("Unexpected error for valid mode %s: %v", tt.mode, err)
+					t.Errorf("Unexpected error for valid mode %s: %v", tt.strategy, err)
 				}
-				if strategy.Name() != string(tt.mode) {
-					t.Errorf("Expected strategy name %s, got %s", tt.mode, strategy.Name())
+				if strategy.Name() != string(tt.strategy) {
+					t.Errorf("Expected strategy name %s, got %s", tt.strategy, strategy.Name())
 				}
 			}
 		})
@@ -351,11 +351,11 @@ func TestVendorStats_Validation(t *testing.T) {
 
 func TestConfig_AdvancedRouting(t *testing.T) {
 	config := &Config{
-		Mode: AutoMode,
+		Strategy: BalancedStrategy,
 	}
 
-	if config.Mode != AutoMode {
-		t.Errorf("Expected mode 'auto', got '%s'", config.Mode)
+	if config.Strategy != BalancedStrategy {
+		t.Errorf("Expected strategy 'balanced', got '%s'", config.Strategy)
 	}
 }
 

@@ -99,7 +99,7 @@ func TestNewWithConfig(t *testing.T) {
 		{
 			name: "with config",
 			config: &Config{
-				Mode:          AutoMode,
+				Strategy:      BalancedStrategy,
 				Timeout:       30 * time.Second,
 				EnableLogging: true,
 				EnableMetrics: true,
@@ -415,7 +415,7 @@ func TestVendorCapabilities(t *testing.T) {
 
 func TestNewWithConfig_Complex(t *testing.T) {
 	config := &Config{
-		Mode:          AutoMode,
+		Strategy:      BalancedStrategy,
 		Timeout:       30 * time.Second,
 		EnableLogging: true,
 		EnableMetrics: true,

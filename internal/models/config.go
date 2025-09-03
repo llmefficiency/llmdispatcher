@@ -6,35 +6,35 @@ import (
 	"time"
 )
 
-// Mode represents the predefined optimization modes
-type Mode string
+// Strategy represents the predefined optimization strategies
+type Strategy string
 
 const (
-	// FastMode prioritizes speed over cost and accuracy
-	FastMode Mode = "fast"
+	// SpeedStrategy prioritizes speed over cost and accuracy
+	SpeedStrategy Strategy = "speed"
 
-	// SophisticatedMode prioritizes accuracy and intelligence over speed and cost
-	SophisticatedMode Mode = "sophisticated"
+	// QualityStrategy prioritizes accuracy and intelligence over speed and cost
+	QualityStrategy Strategy = "quality"
 
-	// CostSavingMode prioritizes cost savings over speed and accuracy
-	CostSavingMode Mode = "cost_saving"
+	// BudgetStrategy prioritizes cost savings over speed and accuracy
+	BudgetStrategy Strategy = "budget"
 
-	// AutoMode automatically balances speed, accuracy, and cost
-	AutoMode Mode = "auto"
+	// BalancedStrategy automatically balances speed, accuracy, and cost
+	BalancedStrategy Strategy = "balanced"
 )
 
-// ModeContext represents the context and state for a specific mode
-type ModeContext struct {
-	Mode             Mode
+// StrategyContext represents the context and state for a specific strategy
+type StrategyContext struct {
+	Strategy         Strategy
 	Request          *Request
 	AvailableVendors map[string]LLMVendor
 	Config           *Config
-	Stats            *ModeStats
+	Stats            *StrategyStats
 	Context          context.Context
 }
 
-// ModeStats tracks mode-specific performance metrics
-type ModeStats struct {
+// StrategyStats tracks strategy-specific performance metrics
+type StrategyStats struct {
 	TotalRequests      int64
 	SuccessfulRequests int64
 	FailedRequests     int64
@@ -43,74 +43,74 @@ type ModeStats struct {
 	LastRequestTime    time.Time
 }
 
-// ModeStrategy defines the interface for mode-specific behavior
-type ModeStrategy interface {
+// StrategyImplementation defines the interface for strategy-specific behavior
+type StrategyImplementation interface {
 	// Name returns the strategy name
 	Name() string
 
-	// SelectVendor selects the best vendor for this mode
-	SelectVendor(ctx *ModeContext) (LLMVendor, error)
+	// SelectVendor selects the best vendor for this strategy
+	SelectVendor(ctx *StrategyContext) (LLMVendor, error)
 
-	// PreprocessContext applies mode-specific context preprocessing
-	PreprocessContext(ctx *ModeContext) error
+	// PreprocessContext applies strategy-specific context preprocessing
+	PreprocessContext(ctx *StrategyContext) error
 
-	// OptimizeRequest applies mode-specific request optimizations
-	OptimizeRequest(ctx *ModeContext) error
+	// OptimizeRequest applies strategy-specific request optimizations
+	OptimizeRequest(ctx *StrategyContext) error
 
-	// ValidateContext validates the context for this mode
-	ValidateContext(ctx *ModeContext) error
+	// ValidateContext validates the context for this strategy
+	ValidateContext(ctx *StrategyContext) error
 
-	// GetPriority returns the priority level for this mode (1-10, 10 being highest)
+	// GetPriority returns the priority level for this strategy (1-10, 10 being highest)
 	GetPriority() int
 }
 
-// ModeRegistry manages all available modes and their strategies
-type ModeRegistry struct {
-	strategies map[Mode]ModeStrategy
+// StrategyRegistry manages all available strategies and their implementations
+type StrategyRegistry struct {
+	strategies map[Strategy]StrategyImplementation
 }
 
-// NewModeRegistry creates a new mode registry
-func NewModeRegistry() *ModeRegistry {
-	registry := &ModeRegistry{
-		strategies: make(map[Mode]ModeStrategy),
+// NewStrategyRegistry creates a new strategy registry
+func NewStrategyRegistry() *StrategyRegistry {
+	registry := &StrategyRegistry{
+		strategies: make(map[Strategy]StrategyImplementation),
 	}
 
 	// Register default strategies
-	registry.RegisterStrategy(FastMode, NewFastModeStrategy())
-	registry.RegisterStrategy(SophisticatedMode, NewSophisticatedModeStrategy())
-	registry.RegisterStrategy(CostSavingMode, NewCostSavingModeStrategy())
-	registry.RegisterStrategy(AutoMode, NewAutoModeStrategy())
+	registry.RegisterStrategy(SpeedStrategy, NewSpeedStrategyImplementation())
+	registry.RegisterStrategy(QualityStrategy, NewQualityStrategyImplementation())
+	registry.RegisterStrategy(BudgetStrategy, NewBudgetStrategyImplementation())
+	registry.RegisterStrategy(BalancedStrategy, NewBalancedStrategyImplementation())
 
 	return registry
 }
 
-// RegisterStrategy registers a new mode strategy
-func (r *ModeRegistry) RegisterStrategy(mode Mode, strategy ModeStrategy) {
-	r.strategies[mode] = strategy
+// RegisterStrategy registers a new strategy implementation
+func (r *StrategyRegistry) RegisterStrategy(strategy Strategy, impl StrategyImplementation) {
+	r.strategies[strategy] = impl
 }
 
-// GetStrategy returns the strategy for a given mode
-func (r *ModeRegistry) GetStrategy(mode Mode) (ModeStrategy, error) {
-	strategy, exists := r.strategies[mode]
+// GetStrategy returns the implementation for a given strategy
+func (r *StrategyRegistry) GetStrategy(strategy Strategy) (StrategyImplementation, error) {
+	impl, exists := r.strategies[strategy]
 	if !exists {
-		return nil, fmt.Errorf("no strategy registered for mode: %s", mode)
+		return nil, fmt.Errorf("no implementation registered for strategy: %s", strategy)
 	}
-	return strategy, nil
+	return impl, nil
 }
 
-// GetAvailableModes returns all registered modes
-func (r *ModeRegistry) GetAvailableModes() []Mode {
-	modes := make([]Mode, 0, len(r.strategies))
-	for mode := range r.strategies {
-		modes = append(modes, mode)
+// GetAvailableStrategies returns all registered strategies
+func (r *StrategyRegistry) GetAvailableStrategies() []Strategy {
+	strategies := make([]Strategy, 0, len(r.strategies))
+	for strategy := range r.strategies {
+		strategies = append(strategies, strategy)
 	}
-	return modes
+	return strategies
 }
 
 // Config holds the simplified dispatcher configuration
 type Config struct {
-	// Mode determines the optimization strategy
-	Mode Mode `json:"mode"`
+	// Strategy determines the optimization strategy
+	Strategy Strategy `json:"strategy"`
 
 	// Basic configuration
 	Timeout       time.Duration `json:"timeout,omitempty"`
@@ -124,13 +124,13 @@ type Config struct {
 	ContextPreprocessing *ContextPreprocessingConfig `json:"context_preprocessing,omitempty"`
 }
 
-// ContextPreprocessingConfig defines how context should be preprocessed for each mode
+// ContextPreprocessingConfig defines how context should be preprocessed for each strategy
 type ContextPreprocessingConfig struct {
-	// Enable context preprocessing for each mode
-	EnabledModes map[Mode]bool `json:"enabled_modes,omitempty"`
+	// Enable context preprocessing for each strategy
+	EnabledStrategies map[Strategy]bool `json:"enabled_strategies,omitempty"`
 
-	// Mode-specific preprocessing rules
-	PreprocessingRules map[Mode][]PreprocessingRule `json:"preprocessing_rules,omitempty"`
+	// Strategy-specific preprocessing rules
+	PreprocessingRules map[Strategy][]PreprocessingRule `json:"preprocessing_rules,omitempty"`
 
 	// Global preprocessing settings
 	MaxContextLength    int  `json:"max_context_length,omitempty"`
@@ -174,8 +174,8 @@ type DispatcherStats struct {
 	TotalCost    float64            `json:"total_cost"`
 	AverageCost  float64            `json:"average_cost"`
 	CostByVendor map[string]float64 `json:"cost_by_vendor"`
-	// Mode-specific stats
-	ModeStats map[Mode]*ModeStats `json:"mode_stats"`
+	// Strategy-specific stats
+	StrategyStats map[Strategy]*StrategyStats `json:"strategy_stats"`
 }
 
 // VendorStats holds statistics for a specific vendor
@@ -191,34 +191,34 @@ type VendorStats struct {
 	TokenUsage  int64   `json:"token_usage"`
 }
 
-// BaseModeStrategy provides common functionality for all mode strategies
-type BaseModeStrategy struct {
-	mode     Mode
+// BaseStrategyImplementation provides common functionality for all strategy implementations
+type BaseStrategyImplementation struct {
+	strategy Strategy
 	priority int
 }
 
-// NewBaseModeStrategy creates a new base mode strategy
-func NewBaseModeStrategy(mode Mode, priority int) *BaseModeStrategy {
-	return &BaseModeStrategy{
-		mode:     mode,
+// NewBaseStrategyImplementation creates a new base strategy implementation
+func NewBaseStrategyImplementation(strategy Strategy, priority int) *BaseStrategyImplementation {
+	return &BaseStrategyImplementation{
+		strategy: strategy,
 		priority: priority,
 	}
 }
 
 // Name returns the strategy name
-func (b *BaseModeStrategy) Name() string {
-	return string(b.mode)
+func (b *BaseStrategyImplementation) Name() string {
+	return string(b.strategy)
 }
 
 // GetPriority returns the priority level
-func (b *BaseModeStrategy) GetPriority() int {
+func (b *BaseStrategyImplementation) GetPriority() int {
 	return b.priority
 }
 
 // ValidateContext provides basic context validation
-func (b *BaseModeStrategy) ValidateContext(ctx *ModeContext) error {
+func (b *BaseStrategyImplementation) ValidateContext(ctx *StrategyContext) error {
 	if ctx == nil {
-		return fmt.Errorf("mode context cannot be nil")
+		return fmt.Errorf("strategy context cannot be nil")
 	}
 	if ctx.Request == nil {
 		return fmt.Errorf("request cannot be nil")
@@ -230,36 +230,36 @@ func (b *BaseModeStrategy) ValidateContext(ctx *ModeContext) error {
 }
 
 // PreprocessContext provides basic context preprocessing
-func (b *BaseModeStrategy) PreprocessContext(ctx *ModeContext) error {
-	// Create mode-specific preprocessing pipeline
-	pipeline := CreateModeSpecificPipeline(ctx.Mode, ctx.Config)
+func (b *BaseStrategyImplementation) PreprocessContext(ctx *StrategyContext) error {
+	// Create strategy-specific preprocessing pipeline
+	pipeline := CreateStrategySpecificPipeline(ctx.Strategy, ctx.Config)
 
 	// Execute the preprocessing pipeline
 	return pipeline.Execute(ctx)
 }
 
 // OptimizeRequest provides basic request optimization
-func (b *BaseModeStrategy) OptimizeRequest(ctx *ModeContext) error {
+func (b *BaseStrategyImplementation) OptimizeRequest(ctx *StrategyContext) error {
 	// TODO: Implement basic request optimization
 	// - Set default parameters if not specified
 	// - Apply mode-specific optimizations
 	return nil
 }
 
-// FastModeStrategy implements fast mode behavior
-type FastModeStrategy struct {
-	*BaseModeStrategy
+// SpeedStrategyImpl implements speed strategy behavior
+type SpeedStrategyImpl struct {
+	*BaseStrategyImplementation
 }
 
-// NewFastModeStrategy creates a new fast mode strategy
-func NewFastModeStrategy() *FastModeStrategy {
-	return &FastModeStrategy{
-		BaseModeStrategy: NewBaseModeStrategy(FastMode, 8),
+// NewSpeedStrategyImplementation creates a new speed strategy implementation
+func NewSpeedStrategyImplementation() *SpeedStrategyImpl {
+	return &SpeedStrategyImpl{
+		BaseStrategyImplementation: NewBaseStrategyImplementation(SpeedStrategy, 8),
 	}
 }
 
-// SelectVendor selects the best vendor for fast mode
-func (f *FastModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
+// SelectVendor selects the best vendor for speed strategy
+func (f *SpeedStrategyImpl) SelectVendor(ctx *StrategyContext) (LLMVendor, error) {
 	// Fast mode intelligence: prioritize vendors known for speed
 	fastVendors := []struct {
 		name     string
@@ -288,8 +288,8 @@ func (f *FastModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
 	return nil, fmt.Errorf("no available vendors for fast mode")
 }
 
-// PreprocessContext applies fast mode context preprocessing
-func (f *FastModeStrategy) PreprocessContext(ctx *ModeContext) error {
+// PreprocessContext applies speed strategy context preprocessing
+func (f *SpeedStrategyImpl) PreprocessContext(ctx *StrategyContext) error {
 	// TODO: Implement fast mode context preprocessing
 	// - Truncate long contexts
 	// - Remove unnecessary messages
@@ -297,8 +297,8 @@ func (f *FastModeStrategy) PreprocessContext(ctx *ModeContext) error {
 	return nil
 }
 
-// OptimizeRequest applies fast mode request optimizations
-func (f *FastModeStrategy) OptimizeRequest(ctx *ModeContext) error {
+// OptimizeRequest applies speed strategy request optimizations
+func (f *SpeedStrategyImpl) OptimizeRequest(ctx *StrategyContext) error {
 	req := ctx.Request
 
 	// Speed optimizations
@@ -315,20 +315,20 @@ func (f *FastModeStrategy) OptimizeRequest(ctx *ModeContext) error {
 	return nil
 }
 
-// SophisticatedModeStrategy implements sophisticated mode behavior
-type SophisticatedModeStrategy struct {
-	*BaseModeStrategy
+// QualityStrategyImpl implements quality strategy behavior
+type QualityStrategyImpl struct {
+	*BaseStrategyImplementation
 }
 
-// NewSophisticatedModeStrategy creates a new sophisticated mode strategy
-func NewSophisticatedModeStrategy() *SophisticatedModeStrategy {
-	return &SophisticatedModeStrategy{
-		BaseModeStrategy: NewBaseModeStrategy(SophisticatedMode, 10),
+// NewQualityStrategyImplementation creates a new quality strategy implementation
+func NewQualityStrategyImplementation() *QualityStrategyImpl {
+	return &QualityStrategyImpl{
+		BaseStrategyImplementation: NewBaseStrategyImplementation(QualityStrategy, 10),
 	}
 }
 
-// SelectVendor selects the best vendor for sophisticated mode
-func (s *SophisticatedModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
+// SelectVendor selects the best vendor for quality mode
+func (s *QualityStrategyImpl) SelectVendor(ctx *StrategyContext) (LLMVendor, error) {
 	// Sophisticated mode intelligence: prioritize vendors with most capable models
 	sophisticatedVendors := []struct {
 		name     string
@@ -357,8 +357,8 @@ func (s *SophisticatedModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, e
 	return nil, fmt.Errorf("no available vendors for sophisticated mode")
 }
 
-// PreprocessContext applies sophisticated mode context preprocessing
-func (s *SophisticatedModeStrategy) PreprocessContext(ctx *ModeContext) error {
+// PreprocessContext applies quality mode context preprocessing
+func (s *QualityStrategyImpl) PreprocessContext(ctx *StrategyContext) error {
 	// TODO: Implement sophisticated mode context preprocessing
 	// - Enhance context with additional information
 	// - Add relevant system prompts
@@ -366,8 +366,8 @@ func (s *SophisticatedModeStrategy) PreprocessContext(ctx *ModeContext) error {
 	return nil
 }
 
-// OptimizeRequest applies sophisticated mode request optimizations
-func (s *SophisticatedModeStrategy) OptimizeRequest(ctx *ModeContext) error {
+// OptimizeRequest applies quality mode request optimizations
+func (s *QualityStrategyImpl) OptimizeRequest(ctx *StrategyContext) error {
 	req := ctx.Request
 
 	// Sophistication optimizations
@@ -384,20 +384,20 @@ func (s *SophisticatedModeStrategy) OptimizeRequest(ctx *ModeContext) error {
 	return nil
 }
 
-// CostSavingModeStrategy implements cost-saving mode behavior
-type CostSavingModeStrategy struct {
-	*BaseModeStrategy
+// BudgetStrategyImpl implements budget strategy behavior
+type BudgetStrategyImpl struct {
+	*BaseStrategyImplementation
 }
 
-// NewCostSavingModeStrategy creates a new cost-saving mode strategy
-func NewCostSavingModeStrategy() *CostSavingModeStrategy {
-	return &CostSavingModeStrategy{
-		BaseModeStrategy: NewBaseModeStrategy(CostSavingMode, 6),
+// NewBudgetStrategyImplementation creates a new budget strategy implementation
+func NewBudgetStrategyImplementation() *BudgetStrategyImpl {
+	return &BudgetStrategyImpl{
+		BaseStrategyImplementation: NewBaseStrategyImplementation(BudgetStrategy, 6),
 	}
 }
 
-// SelectVendor selects the best vendor for cost-saving mode
-func (c *CostSavingModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
+// SelectVendor selects the best vendor for budget mode
+func (c *BudgetStrategyImpl) SelectVendor(ctx *StrategyContext) (LLMVendor, error) {
 	// Cost-saving mode intelligence: prioritize cheapest vendors
 	costSavingVendors := []struct {
 		name     string
@@ -427,8 +427,8 @@ func (c *CostSavingModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, erro
 	return nil, fmt.Errorf("no available vendors for cost-saving mode")
 }
 
-// PreprocessContext applies cost-saving mode context preprocessing
-func (c *CostSavingModeStrategy) PreprocessContext(ctx *ModeContext) error {
+// PreprocessContext applies budget mode context preprocessing
+func (c *BudgetStrategyImpl) PreprocessContext(ctx *StrategyContext) error {
 	// TODO: Implement cost-saving mode context preprocessing
 	// - Compress context
 	// - Remove redundant information
@@ -436,8 +436,8 @@ func (c *CostSavingModeStrategy) PreprocessContext(ctx *ModeContext) error {
 	return nil
 }
 
-// OptimizeRequest applies cost-saving mode request optimizations
-func (c *CostSavingModeStrategy) OptimizeRequest(ctx *ModeContext) error {
+// OptimizeRequest applies budget mode request optimizations
+func (c *BudgetStrategyImpl) OptimizeRequest(ctx *StrategyContext) error {
 	req := ctx.Request
 
 	// Cost-saving optimizations
@@ -454,20 +454,20 @@ func (c *CostSavingModeStrategy) OptimizeRequest(ctx *ModeContext) error {
 	return nil
 }
 
-// AutoModeStrategy implements auto mode behavior
-type AutoModeStrategy struct {
-	*BaseModeStrategy
+// BalancedStrategyImpl implements balanced strategy behavior
+type BalancedStrategyImpl struct {
+	*BaseStrategyImplementation
 }
 
-// NewAutoModeStrategy creates a new auto mode strategy
-func NewAutoModeStrategy() *AutoModeStrategy {
-	return &AutoModeStrategy{
-		BaseModeStrategy: NewBaseModeStrategy(AutoMode, 5),
+// NewBalancedStrategyImplementation creates a new balanced strategy implementation
+func NewBalancedStrategyImplementation() *BalancedStrategyImpl {
+	return &BalancedStrategyImpl{
+		BaseStrategyImplementation: NewBaseStrategyImplementation(BalancedStrategy, 5),
 	}
 }
 
-// SelectVendor selects the best vendor for auto mode
-func (a *AutoModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
+// SelectVendor selects the best vendor for balanced mode
+func (a *BalancedStrategyImpl) SelectVendor(ctx *StrategyContext) (LLMVendor, error) {
 	// Auto mode intelligence: balance speed, cost, and capability
 	balancedVendors := []struct {
 		name     string
@@ -499,8 +499,8 @@ func (a *AutoModeStrategy) SelectVendor(ctx *ModeContext) (LLMVendor, error) {
 	return nil, fmt.Errorf("no available vendors for auto mode")
 }
 
-// PreprocessContext applies auto mode context preprocessing
-func (a *AutoModeStrategy) PreprocessContext(ctx *ModeContext) error {
+// PreprocessContext applies balanced mode context preprocessing
+func (a *BalancedStrategyImpl) PreprocessContext(ctx *StrategyContext) error {
 	// TODO: Implement auto mode context preprocessing
 	// - Analyze context complexity
 	// - Apply appropriate preprocessing based on analysis
@@ -508,8 +508,8 @@ func (a *AutoModeStrategy) PreprocessContext(ctx *ModeContext) error {
 	return nil
 }
 
-// OptimizeRequest applies auto mode request optimizations
-func (a *AutoModeStrategy) OptimizeRequest(ctx *ModeContext) error {
+// OptimizeRequest applies balanced mode request optimizations
+func (a *BalancedStrategyImpl) OptimizeRequest(ctx *StrategyContext) error {
 	req := ctx.Request
 
 	// Balanced optimizations
