@@ -4,16 +4,16 @@ This document shows how to use the LLM Dispatcher with the simplified configurat
 
 ## Overview
 
-The LLM Dispatcher now supports 4 predefined optimization modes:
+The LLM Dispatcher now supports 4 predefined optimization strategies:
 
-- **Fast Mode**: Prioritizes speed over cost and accuracy
-- **Sophisticated Mode**: Prioritizes accuracy and intelligence over speed and cost  
-- **Cost Saving Mode**: Prioritizes cost savings over speed and accuracy
-- **Auto Mode**: Automatically balances speed, accuracy, and cost
+- **Fast Strategy**: Prioritizes speed over cost and accuracy
+- **Sophisticated Strategy**: Prioritizes accuracy and intelligence over speed and cost  
+- **Cost Saving Strategy**: Prioritizes cost savings over speed and accuracy
+- **Auto Strategy**: Automatically balances speed, accuracy, and cost
 
 ## Basic Usage
 
-### Fast Mode - For Quick Responses
+### Fast Strategy - For Quick Responses
 
 ```go
 package main
@@ -27,7 +27,7 @@ import (
 )
 
 func main() {
-    // Create dispatcher with speed mode
+    // Create dispatcher with speed strategy
     config := &models.Config{
         Strategy: models.SpeedStrategy,
         Timeout: 10 * time.Second,
@@ -58,10 +58,10 @@ func main() {
 }
 ```
 
-### Quality Mode - For High-Quality Responses
+### Quality Strategy - For High-Quality Responses
 
 ```go
-// Create dispatcher with quality mode
+// Create dispatcher with quality strategy
 config := &models.Config{
     Strategy: models.QualityStrategy,
     Timeout: 30 * time.Second,
@@ -71,12 +71,12 @@ config := &models.Config{
 d := dispatcher.NewWithConfig(config)
 ```
 
-### Budget Mode - For Budget-Conscious Usage
+### Budget Strategy - For Budget-Conscious Usage
 
 ```go
-// Create dispatcher with budget mode
+// Create dispatcher with budget strategy
 config := &models.Config{
-    Mode: models.BudgetMode,
+    Strategy: models.BudgetStrategy,
     Timeout: 20 * time.Second,
     EnableLogging: true,
 }
@@ -84,12 +84,12 @@ config := &models.Config{
 d := dispatcher.NewWithConfig(config)
 ```
 
-### Balanced Mode - For Balanced Optimization
+### Balanced Strategy - For Balanced Optimization
 
 ```go
-// Create dispatcher with balanced mode (default)
+// Create dispatcher with balanced strategy (default)
 config := &models.Config{
-    Mode: models.BalancedMode,
+    Strategy: models.BalancedStrategy,
     Timeout: 15 * time.Second,
     EnableLogging: true,
 }
@@ -103,24 +103,24 @@ d := dispatcher.NewWithConfig(config)
 
 
 
-## Mode Selection Strategy
+## Strategy Selection Logic
 
-### Fast Mode
+### Fast Strategy
 - Prioritizes local vendors (fastest)
 - Falls back to vendors known for low latency (Anthropic, OpenAI)
 - Ignores cost and model sophistication
 
-### Sophisticated Mode  
+### Sophisticated Strategy  
 - Prioritizes vendors with the most capable models
 - Preference order: Claude (Anthropic) > GPT-4 (OpenAI) > Google
 - Ignores cost and speed considerations
 
-### Cost Saving Mode
+### Cost Saving Strategy
 - Prioritizes local vendors (free)
 - Falls back to cheaper cloud options
 - Preference order: local > Azure > Google > OpenAI > Anthropic
 
-### Auto Mode
+### Auto Strategy
 - Balances all three factors
 - Starts with local (good balance of speed and cost)
 - Falls back to vendors that are reasonably fast and cost-effective
@@ -139,9 +139,9 @@ config := &models.Config{
     },
 }
 
-// New way - use modes
+// New way - use strategies
 config := &models.Config{
-    Mode: models.BalancedMode,
+    Strategy: models.BalancedStrategy,
 }
 ```
 
@@ -158,17 +158,17 @@ config := &models.Config{
 
 // New way
 config := &models.Config{
-    Mode: models.BudgetMode,
+    Strategy: models.BudgetStrategy,
 }
 ```
 
 ## Best Practices
 
-1. **Start with Auto Mode**: It provides a good balance for most use cases
-2. **Use Fast Mode for real-time applications**: Chat interfaces, quick responses
-3. **Use Sophisticated Mode for complex tasks**: Analysis, reasoning, creative writing
-4. **Use Cost Saving Mode for high-volume usage**: Batch processing, testing
-5. **Choose the right mode**: Select the mode that best fits your use case
+1. **Start with Auto Strategy**: It provides a good balance for most use cases
+2. **Use Fast Strategy for real-time applications**: Chat interfaces, quick responses
+3. **Use Sophisticated Strategy for complex tasks**: Analysis, reasoning, creative writing
+4. **Use Cost Saving Strategy for high-volume usage**: Batch processing, testing
+5. **Choose the right strategy**: Select the strategy that best fits your use case
 6. **Monitor performance**: Use the built-in metrics to track vendor performance
 
 ## Error Handling
@@ -180,7 +180,7 @@ resp, err := d.Send(ctx, req)
 if err != nil {
     // Check if it's a vendor availability issue
     if errors.Is(err, models.ErrVendorUnavailable) {
-        log.Printf("No vendors available for %s mode", d.config.Mode)
+        log.Printf("No vendors available for %s strategy", d.config.Strategy)
     }
     log.Fatal(err)
 }

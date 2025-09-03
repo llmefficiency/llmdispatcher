@@ -186,7 +186,7 @@ func (m *StrategyRouter) SelectVendor(ctx context.Context, req *Request, vendors
 
 // selectSpeedVendor prioritizes vendors with lowest latency and fastest models
 func (m *StrategyRouter) selectSpeedVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
-	// Fast mode intelligence: prioritize vendors and models known for speed
+	// Fast strategy intelligence: prioritize vendors and models known for speed
 	fastVendors := []struct {
 		name     string
 		priority int
@@ -215,12 +215,12 @@ func (m *StrategyRouter) selectSpeedVendor(ctx context.Context, req *Request, ve
 		}
 	}
 
-	return nil, fmt.Errorf("no available vendors for fast mode")
+	return nil, fmt.Errorf("no available vendors for fast strategy")
 }
 
 // selectQualityVendor prioritizes the most capable models and vendors
 func (m *StrategyRouter) selectQualityVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
-	// Sophisticated mode intelligence: prioritize vendors with the most capable models
+	// Sophisticated strategy intelligence: prioritize vendors with the most capable models
 	sophisticatedVendors := []struct {
 		name     string
 		priority int
@@ -249,12 +249,12 @@ func (m *StrategyRouter) selectQualityVendor(ctx context.Context, req *Request, 
 		}
 	}
 
-	return nil, fmt.Errorf("no available vendors for sophisticated mode")
+	return nil, fmt.Errorf("no available vendors for sophisticated strategy")
 }
 
 // selectBudgetVendor prioritizes the cheapest options
 func (m *StrategyRouter) selectBudgetVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
-	// Cost-saving mode intelligence: prioritize cheapest vendors and models
+	// Cost-saving strategy intelligence: prioritize cheapest vendors and models
 	costSavingVendors := []struct {
 		name     string
 		priority int
@@ -284,12 +284,12 @@ func (m *StrategyRouter) selectBudgetVendor(ctx context.Context, req *Request, v
 		}
 	}
 
-	return nil, fmt.Errorf("no available vendors for cost-saving mode")
+	return nil, fmt.Errorf("no available vendors for cost-saving strategy")
 }
 
 // selectBalancedVendor balances all factors intelligently
 func (m *StrategyRouter) selectBalancedVendor(ctx context.Context, req *Request, vendors map[string]Vendor) (Vendor, error) {
-	// Auto mode intelligence: balance speed, cost, and capability
+	// Auto strategy intelligence: balance speed, cost, and capability
 	balancedVendors := []struct {
 		name     string
 		priority int
@@ -321,7 +321,7 @@ func (m *StrategyRouter) selectBalancedVendor(ctx context.Context, req *Request,
 		}
 	}
 
-	return nil, fmt.Errorf("no available vendors for auto mode")
+	return nil, fmt.Errorf("no available vendors for auto strategy")
 }
 
 // optimizeRequestForSpeed tunes request parameters for maximum speed

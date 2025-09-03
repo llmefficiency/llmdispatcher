@@ -60,11 +60,11 @@ func printDetailedStats(stats *models.DispatcherStats) {
 	}
 }
 
-// printModeComparison prints a comparison of stats across different modes
+// printStrategyComparison prints a comparison of stats across different strategies
 func printStrategyComparison(strategyStats map[models.Strategy]*models.DispatcherStats) {
-	fmt.Printf("\n🎯 MODE COMPARISON:\n")
+	fmt.Printf("\n🎯 STRATEGY COMPARISON:\n")
 	fmt.Printf("┌─────────────────────────────────────────────────────────────────────────────────┐\n")
-	fmt.Printf("│ Mode           │ Requests │ Successes │ Failures │ Avg Latency │ Success Rate │\n")
+	fmt.Printf("│ Strategy       │ Requests │ Successes │ Failures │ Avg Latency │ Success Rate │\n")
 	fmt.Printf("├─────────────────────────────────────────────────────────────────────────────────┤\n")
 
 	for strategy, stats := range strategyStats {
@@ -111,7 +111,7 @@ func loadEnv(filename string) error {
 	return scanner.Err()
 }
 
-// runModeTest runs a test with a specific mode and returns the stats
+// runStrategyTest runs a test with a specific strategy and returns the stats
 func runStrategyTest(strategy models.Strategy, testRequest *models.Request) *models.DispatcherStats {
 	// Create dispatcher with strategy-specific configuration
 	config := &models.Config{
@@ -185,10 +185,10 @@ func runStrategyTest(strategy models.Strategy, testRequest *models.Request) *mod
 	return disp.GetStats()
 }
 
-// runModeComparison runs tests across all modes and shows comparison
-func runModeComparison() {
-	fmt.Printf("\n🚀 Running Mode Comparison Test\n")
-	fmt.Printf("Testing all modes with the same request...\n")
+// runStrategyComparison runs tests across all strategies and shows comparison
+func runStrategyComparison() {
+	fmt.Printf("\n🚀 Running Strategy Comparison Test\n")
+	fmt.Printf("Testing all strategies with the same request...\n")
 
 	testReq := &models.Request{
 		Model: "gpt-3.5-turbo",
@@ -234,27 +234,27 @@ func main() {
 	}
 
 	// Parse command line flags
-	var localMode = flag.Bool("local", false, "Run in local mode with Ollama")
-	var vendorMode = flag.Bool("vendor", false, "Run in vendor mode")
+	var localMode = flag.Bool("local", false, "Run in local strategy with Ollama")
+	var vendorMode = flag.Bool("vendor", false, "Run in vendor strategy")
 	var vendorOverride = flag.String("vendor-override", "", "Override vendor to use (anthropic, openai). If not specified, uses default vendor")
-	var modelPath = flag.String("model", "llama2:7b", "Model to use in local mode")
+	var modelPath = flag.String("model", "llama2:7b", "Model to use in local strategy")
 	var serverURL = flag.String("server", "http://localhost:11434", "Ollama server URL")
-	var compareModes = flag.Bool("compare", false, "Run comparison test across all modes")
+	var compareModes = flag.Bool("compare", false, "Run comparison test across all strategies")
 	flag.Parse()
 
-	// Check if running mode comparison
+	// Check if running strategy comparison
 	if *compareModes {
-		runModeComparison()
+		runStrategyComparison()
 		return
 	}
 
-	// Check if running in local mode
+	// Check if running in local strategy
 	if *localMode {
 		runLocalMode(*modelPath, *serverURL)
 		return
 	}
 
-	// Check if running in vendor mode
+	// Check if running in vendor strategy
 	if *vendorMode {
 		runVendorMode(*vendorOverride, *modelPath, *serverURL)
 		return
@@ -398,9 +398,9 @@ func main() {
 	printDetailedStats(stats)
 }
 
-// runLocalMode runs the dispatcher in local mode using Ollama
+// runLocalMode runs the dispatcher in local strategy using Ollama
 func runLocalMode(modelPath, serverURL string) {
-	log.Printf("🚀 Starting local mode with model: %s", modelPath)
+	log.Printf("🚀 Starting local strategy with model: %s", modelPath)
 	log.Printf("📡 Connecting to Ollama server: %s", serverURL)
 
 	// Create dispatcher with local configuration
@@ -542,12 +542,12 @@ func runLocalMode(modelPath, serverURL string) {
 	stats := disp.GetStats()
 	printDetailedStats(stats)
 
-	log.Println("🎉 Local mode test completed successfully!")
+	log.Println("🎉 Local strategy test completed successfully!")
 }
 
-// runVendorMode runs the dispatcher in vendor mode to test specific vendors
+// runVendorMode runs the dispatcher in vendor strategy to test specific vendors
 func runVendorMode(vendorOverride, modelPath, serverURL string) {
-	log.Printf("🚀 Starting vendor mode")
+	log.Printf("🚀 Starting vendor strategy")
 
 	// Determine which vendor to use
 	var targetVendor string
@@ -740,5 +740,5 @@ func runVendorMode(vendorOverride, modelPath, serverURL string) {
 	stats := disp.GetStats()
 	printDetailedStats(stats)
 
-	log.Printf("🎉 Vendor mode test completed successfully for %s!", targetVendor)
+	log.Printf("🎉 Vendor strategy test completed successfully for %s!", targetVendor)
 }

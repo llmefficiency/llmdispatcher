@@ -155,11 +155,11 @@ anthropicVendor := vendors.NewAnthropic(&models.VendorConfig{
 })
 disp.RegisterVendor(anthropicVendor)
 
-// Send request - automatically routes based on mode strategy
+// Send request - automatically routes based on strategy
 req := &models.Request{
     Model: "gpt-3.5-turbo",
     Messages: []models.Message{{Role: "user", Content: "Hello!"}},
-    Mode: "fast", // Override mode for this request
+    Strategy: "fast", // Override strategy for this request
 }
 response, err := disp.Send(context.Background(), req)
 ```
@@ -213,13 +213,13 @@ make webservice
 ```
 
 **Demo Web App Features:**
-- ✅ **Interactive Chat Interface** - Test different optimization modes
-- ✅ **Real-time Mode Comparison** - See all modes stats together in a clear table
-- ✅ **Per-mode Statistics** - Detailed breakdown for each mode
+- ✅ **Interactive Chat Interface** - Test different optimization strategies
+- ✅ **Real-time Strategy Comparison** - See all strategies stats together in a clear table
+- ✅ **Per-strategy Statistics** - Detailed breakdown for each strategy
 - ✅ **Streaming Support** - Real-time streaming responses
-- ✅ **Multi-vendor Routing** - Automatic vendor selection based on mode
-- ✅ **Cost & Performance Tracking** - Monitor costs and latency across modes
-- ✅ **No Dropdown Selection** - All modes displayed together for easy comparison
+- ✅ **Multi-vendor Routing** - Automatic vendor selection based on strategy
+- ✅ **Cost & Performance Tracking** - Monitor costs and latency across strategies
+- ✅ **No Dropdown Selection** - All strategies displayed together for easy comparison
 
 **CLI Demo Features:**
 - ✅ Multi-vendor request routing
@@ -230,21 +230,21 @@ make webservice
 - ✅ Local model integration with Ollama
 
 ```bash
-# CLI demo with different modes:
-# Vendor mode with automatic vendor selection
+# CLI demo with different strategies:
+# Vendor strategy with automatic vendor selection
 go run apps/cli/cli.go --vendor
 
-# Vendor mode with specific vendor override
+# Vendor strategy with specific vendor override
 go run apps/cli/cli.go --vendor --vendor-override anthropic
 go run apps/cli/cli.go --vendor --vendor-override openai
 
-# Local mode with Ollama (default model: llama2:7b)
+# Local strategy with Ollama (default model: llama2:7b)
 go run apps/cli/cli.go --local
 
-# Local mode with custom model and server
+# Local strategy with custom model and server
 go run apps/cli/cli.go --local --model llama2:13b --server http://localhost:11434
 
-# Mode comparison test across all optimization modes
+# Strategy comparison test across all optimization strategies
 go run apps/cli/cli.go --compare
 ```
 
@@ -252,10 +252,10 @@ go run apps/cli/cli.go --compare
 
 ### 🚀 Core Features
 - **Multi-vendor support**: OpenAI, Anthropic, Google, Azure OpenAI, Local (Ollama)
-- **Mode-based routing**: Automatic vendor selection based on optimization modes (Fast, Sophisticated, Cost-Saving, Auto)
+- **Strategy-based routing**: Automatic vendor selection based on optimization strategies (Fast, Sophisticated, Cost-Saving, Auto)
 - **Automatic fallback**: Seamless failover when vendors are unavailable
 - **Streaming support**: Real-time responses with vendor-agnostic interface
-- **Basic cost awareness**: Built into mode strategies (advanced cost optimization planned)
+- **Basic cost awareness**: Built into strategy selection (advanced cost optimization planned)
 - **Advanced retry**: Configurable retry policies with exponential backoff
 
 ### 📊 Monitoring & Analytics

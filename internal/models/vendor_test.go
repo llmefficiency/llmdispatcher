@@ -24,7 +24,7 @@ func TestRequest_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "empty model without mode",
+			name: "empty model without strategy",
 			request: &Request{
 				Model: "",
 				Messages: []Message{
@@ -34,7 +34,7 @@ func TestRequest_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "empty model with mode",
+			name: "empty model with strategy",
 			request: &Request{
 				Model:    "",
 				Strategy: "speed",
@@ -108,7 +108,7 @@ func TestRequest_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "invalid mode",
+			name: "invalid strategy",
 			request: &Request{
 				Model:    "",
 				Strategy: "invalid_mode",

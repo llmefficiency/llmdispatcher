@@ -325,7 +325,7 @@ func TestSend_WithModeStrategy(t *testing.T) {
 		},
 	}
 
-	// Test that the mode strategy is used
+	// Test that the strategy is used
 	_, err := dispatcher.Send(context.Background(), req)
 	if err != nil {
 		t.Errorf("Expected successful request, got error: %v", err)

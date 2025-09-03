@@ -199,16 +199,16 @@ func TestModeStrategy_Validation(t *testing.T) {
 			registry := NewStrategyRegistry()
 
 			if tt.wantErr {
-				// For invalid mode, GetStrategy should return an error
+				// For invalid strategy, GetStrategy should return an error
 				_, err := registry.GetStrategy(tt.strategy)
 				if err == nil {
-					t.Errorf("Expected error for invalid mode %s", tt.strategy)
+					t.Errorf("Expected error for invalid strategy %s", tt.strategy)
 				}
 			} else {
 				// For valid modes, the strategy should be created successfully
 				strategy, err := registry.GetStrategy(tt.strategy)
 				if err != nil {
-					t.Errorf("Unexpected error for valid mode %s: %v", tt.strategy, err)
+					t.Errorf("Unexpected error for valid strategy %s: %v", tt.strategy, err)
 				}
 				if strategy.Name() != string(tt.strategy) {
 					t.Errorf("Expected strategy name %s, got %s", tt.strategy, strategy.Name())
